@@ -27,6 +27,7 @@ type ElectionDashboardProps = {
 export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
   const [selectedRegion, setSelectedRegion] = useState(selectedRegionSlug);
   const [selectedAreaId, setSelectedAreaId] = useState("");
+  const [selectedComparisonIds, setSelectedComparisonIds] = useState<string[]>([]);
   const region = getRegionBySlug(dataset, selectedRegion);
   const regionElections = getRegionElections(dataset, region.id);
   const areaOptions = getAdministrativeAreaOptions(region.slug);
@@ -35,7 +36,12 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
   const [selectedElectionId, setSelectedElectionId] = useState(elections[0]?.id ?? "");
   const activeElectionId = elections.some((item) => item.id === selectedElectionId) ? selectedElectionId : elections[0]?.id ?? "";
   const election = getElectionDetail(dataset, activeElectionId);
-  const comparison = useMemo(() => buildCandidateComparison(election.candidates.slice(0, 2)), [election.candidates]);
+  const comparisonCandidates = useMemo(
+    () => election.candidates.filter((candidate) => selectedComparisonIds.includes(candidate.id)),
+    [election.candidates, selectedComparisonIds]
+  );
+  const comparison = useMemo(() => buildCandidateComparison(comparisonCandidates), [comparisonCandidates]);
+  const selectedComparisonIdSet = useMemo(() => new Set(selectedComparisonIds), [selectedComparisonIds]);
   const regionsBySido = useMemo(() => {
     const grouped = new Map<string, Dataset["regions"]>();
 
@@ -59,6 +65,7 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
     setSelectedRegion(regionSlug);
     setSelectedAreaId("");
     setSelectedElectionId(nextElections[0]?.id ?? "");
+    setSelectedComparisonIds([]);
   }
 
   function handleAreaSelected(areaId: string) {
@@ -67,6 +74,26 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
 
     setSelectedAreaId(areaId);
     setSelectedElectionId(nextElections[0]?.id ?? "");
+    setSelectedComparisonIds([]);
+  }
+
+  function handleElectionSelected(electionId: string) {
+    setSelectedElectionId(electionId);
+    setSelectedComparisonIds([]);
+  }
+
+  function handleComparisonToggle(candidateId: string) {
+    setSelectedComparisonIds((current) => {
+      if (current.includes(candidateId)) {
+        return current.filter((id) => id !== candidateId);
+      }
+
+      if (current.length >= 4) {
+        return current;
+      }
+
+      return [...current, candidateId];
+    });
   }
 
   return (
@@ -166,7 +193,7 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setSelectedElectionId(item.id)}
+                onClick={() => handleElectionSelected(item.id)}
                 className={`flex w-full items-center justify-between rounded-md border px-4 py-3 text-left ${
                   isSelected ? "border-civic bg-white ring-2 ring-civic/15" : "border-line bg-white"
                 }`}
@@ -196,8 +223,17 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
 
         {election.candidates.length > 0 ? (
           <div className="mt-4 space-y-3">
-            {election.candidates.map((candidate) => (
-            <article key={candidate.id} className="rounded-md border border-line bg-white p-4">
+            {election.candidates.map((candidate) => {
+              const isSelectedForComparison = selectedComparisonIdSet.has(candidate.id);
+              const isComparisonLimitReached = selectedComparisonIds.length >= 4 && !isSelectedForComparison;
+
+              return (
+            <article
+              key={candidate.id}
+              className={`rounded-md border bg-white p-4 ${
+                isSelectedForComparison ? "border-civic ring-2 ring-civic/15" : "border-line"
+              }`}
+            >
               <div className="flex gap-3">
                 <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-paper">
                   {candidate.photoUrl ? (
@@ -232,11 +268,25 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
                 <DocumentLink label="5대공약" url={candidate.pledgePdf?.url} status={candidate.pledgePdf?.status} />
                 <DocumentLink label="공개자료" url={candidate.disclosureViewerUrl} status="available" />
               </div>
+              <button
+                type="button"
+                onClick={() => handleComparisonToggle(candidate.id)}
+                disabled={isComparisonLimitReached}
+                className={`mt-3 flex w-full items-center justify-center rounded-md border px-3 py-2 text-xs font-semibold ${
+                  isSelectedForComparison
+                    ? "border-civic bg-civic text-white"
+                    : "border-line bg-paper text-ink disabled:text-muted"
+                }`}
+                aria-pressed={isSelectedForComparison}
+              >
+                {isSelectedForComparison ? "비교 선택됨" : "비교에 추가"}
+              </button>
               <p className="mt-3 text-[11px] leading-4 text-muted">
                 출처: {candidate.source.label} · 수집 {candidate.source.fetchedAt}
               </p>
             </article>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="mt-4 rounded-md border border-line bg-paper p-4">
@@ -249,22 +299,32 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
       </section>
 
       <section className="px-5 py-5">
-        <h2 className="text-base font-bold">빠른 비교</h2>
-        {comparison.candidates.length > 0 ? (
-          <div className="mt-3 overflow-hidden rounded-md border border-line bg-white">
-          <div className="grid grid-cols-[88px_1fr_1fr] border-b border-line bg-paper text-xs font-bold">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-bold">후보 비교</h2>
+          <span className="text-xs text-muted">{comparison.candidates.length}명 선택</span>
+        </div>
+        {comparison.candidates.length >= 2 ? (
+          <div className="mt-3 overflow-x-auto rounded-md border border-line bg-white">
+          <div
+            className="grid border-b border-line bg-paper text-xs font-bold"
+            style={{ gridTemplateColumns: `88px repeat(${comparison.candidates.length}, minmax(120px, 1fr))` }}
+          >
             <div className="px-3 py-2">항목</div>
             {comparison.candidates.map((candidate) => (
-              <div key={candidate.id} className="px-3 py-2">
-                {candidate.name}
+              <div key={candidate.id} className="min-w-0 px-3 py-2">
+                <span className="block truncate">{candidate.name}</span>
               </div>
             ))}
           </div>
-          {comparison.rows.slice(0, 8).map((row) => (
-            <div key={row.label} className="grid grid-cols-[88px_1fr_1fr] border-b border-line text-xs last:border-b-0">
+          {comparison.rows.map((row) => (
+            <div
+              key={row.label}
+              className="grid border-b border-line text-xs last:border-b-0"
+              style={{ gridTemplateColumns: `88px repeat(${comparison.candidates.length}, minmax(120px, 1fr))` }}
+            >
               <div className="bg-paper px-3 py-2 font-semibold text-muted">{row.label}</div>
               {row.values.map((value, index) => (
-                <div key={`${row.label}-${index}`} className="px-3 py-2 leading-5">
+                <div key={`${row.label}-${index}`} className="min-w-0 px-3 py-2 leading-5">
                   {value}
                 </div>
               ))}
@@ -273,7 +333,7 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
           </div>
         ) : (
           <div className="mt-3 rounded-md border border-line bg-white p-4 text-xs leading-5 text-muted">
-            후보 데이터가 수집되면 동일 선거구 후보를 같은 항목으로 비교합니다.
+            후보 카드에서 2명 이상을 선택하면 같은 항목으로 비교합니다. 기본으로 특정 후보를 올리지 않습니다.
           </div>
         )}
       </section>

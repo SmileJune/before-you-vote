@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 
 const nationwide = JSON.parse(await readFile(new URL("../data/nec/nationwide-candidates-20260603.json", import.meta.url), "utf8"));
 const nationwideDetails = await readCandidateDetails();
+const candidateDocuments = await readCandidateDocuments();
 const previousDataset = await readPreviousDataset();
 const previousByHuboId = new Map((previousDataset?.candidates ?? []).map((candidate) => [extractHuboId(candidate.id), candidate]));
 
@@ -132,6 +133,7 @@ function getElectionKey(candidate, region) {
 
 function toAppCandidate(candidate, electionId) {
   const detail = nationwideDetails.details?.[candidate.huboid] ?? null;
+  const documents = candidateDocuments.documents?.[candidate.huboid] ?? null;
   const previous = previousByHuboId.get(candidate.huboid);
   const career = [candidate.career1, candidate.career2].filter(Boolean).join("\n") || "자료 없음";
 
@@ -152,8 +154,8 @@ function toAppCandidate(candidate, electionId) {
     taxArrearsCurrent: detail?.taxArrearsCurrent ?? previous?.taxArrearsCurrent ?? null,
     criminalRecordCount: detail?.criminalRecordCount ?? previous?.criminalRecordCount ?? null,
     photoUrl: detail?.photoUrl ?? previous?.photoUrl ?? null,
-    pamphletPdf: previous?.pamphletPdf ?? null,
-    pledgePdf: previous?.pledgePdf ?? null,
+    pamphletPdf: normalizeDocument(documents?.pamphletPdf) ?? previous?.pamphletPdf ?? null,
+    pledgePdf: normalizeDocument(documents?.pledgePdf) ?? previous?.pledgePdf ?? null,
     disclosureViewerUrl: detail?.disclosureViewerUrl ?? previous?.disclosureViewerUrl ?? `https://info.nec.go.kr/electioninfo/candidate_detail_info.xhtml?electionId=0020260603&huboId=${candidate.huboid}`,
     source: detail?.source ?? previous?.source ?? {
       label: "중앙선거관리위원회 후보자 OpenAPI",
@@ -290,6 +292,20 @@ async function readCandidateDetails() {
   return readFile(new URL("../data/nec/nationwide-candidate-details-20260603.json", import.meta.url), "utf8")
     .then(JSON.parse)
     .catch(() => ({ details: {} }));
+}
+
+async function readCandidateDocuments() {
+  return readFile(new URL("../data/nec/candidate-documents-20260603.json", import.meta.url), "utf8")
+    .then(JSON.parse)
+    .catch(() => ({ documents: {} }));
+}
+
+function normalizeDocument(document) {
+  if (!document || document.status === "missing") {
+    return null;
+  }
+
+  return document;
 }
 
 function extractHuboId(candidateId) {

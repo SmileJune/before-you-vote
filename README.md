@@ -272,11 +272,20 @@ npm run collect:details
 
 이 명령은 선거통계시스템 후보자 상세 페이지를 후보자별로 호출해 재산, 병역, 납세, 최근 5년 체납, 현 체납, 전과, 사진 URL을 수집합니다. 중간 저장을 지원하므로 중단 후 다시 실행하면 이미 수집한 후보자는 건너뜁니다.
 
+전국 후보자 공보/공약 PDF 메타데이터 수집:
+
+```bash
+npm run collect:documents
+```
+
+이 명령은 중앙선관위 정책공약마당의 후보자공약 JSON을 선거종류·시도·페이지 단위로 조회해 후보자별 선거공보와 5대공약 PDF 링크를 수집합니다. PDF 원문은 `https://cdn.nec.go.kr/policy_pdf/...` 공개 CDN URL로 연결합니다.
+
 생성 파일:
 
 - `data/nec/nationwide-candidates-20260603.json`
 - `data/nec/nationwide-summary-20260603.json`
 - `data/nec/nationwide-candidate-details-20260603.json`
+- `data/nec/candidate-documents-20260603.json`
 - `data/nec/app-election-dataset-20260603.json`
 - `src/domain/generated-election-data.ts`
 
@@ -305,6 +314,9 @@ npm run collect:districts
 - 지역별 선거 항목: 3,209개
 - 후보자 표시 항목: 17,904개
 - 상세 공개정보 수집 후보: 7,829명
+- 공보/공약 문서 수집 후보: 6,271명
+- 앱 표시 후보 중 선거공보 PDF 링크: 7,547개
+- 앱 표시 후보 중 5대공약 PDF 링크: 2,691개
 - 읍면동-선거구 매핑 지역: 243개
 
 예시로 `경기도 화성시동탄구`는 다음 11개 선거를 표시합니다.
@@ -339,6 +351,37 @@ npm run collect:districts
 
 - 중앙선거관리위원회 후보자 OpenAPI
 - 중앙선거관리위원회 선거통계시스템 후보자 상세 페이지
+- 중앙선거관리위원회 정책공약마당 후보자공약 JSON
+
+### PostgreSQL Import
+
+앱은 기본적으로 생성된 JSON 데이터셋을 읽습니다. `DATABASE_URL`이 설정되어 있으면 PostgreSQL에서 먼저 조회하고, DB 조회에 실패하면 JSON으로 fallback합니다.
+
+로컬 PostgreSQL 실행:
+
+```bash
+docker compose up -d postgres
+```
+
+현재 JSON 데이터셋을 PostgreSQL로 적재:
+
+```bash
+DATABASE_URL=postgresql://before_you_vote:before_you_vote@localhost:5433/before_you_vote npm run db:import
+```
+
+스키마 파일:
+
+- `db/schema.sql`
+
+주요 테이블:
+
+- `regions`
+- `elections`
+- `election_regions`
+- `candidates`
+- `candidate_details`
+- `candidate_documents`
+- `collection_runs`
 
 주의:
 

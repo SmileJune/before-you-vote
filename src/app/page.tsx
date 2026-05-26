@@ -1,6 +1,8 @@
 import { ElectionDashboard } from "@/components/election-dashboard";
-import { electionDataset } from "@/domain/generated-election-data";
+import { loadElectionDataset } from "@/server/election-data";
 
-export default function Home() {
-  return <ElectionDashboard dataset={electionDataset} />;
+export default async function Home() {
+  const dataset = await loadElectionDataset();
+
+  return <ElectionDashboard dataset={dataset} />;
 }

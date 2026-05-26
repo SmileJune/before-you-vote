@@ -501,18 +501,88 @@ Failures: 0
 
 남은 24명은 상세 페이지 자체에 해당 공개정보 표가 없어 `자료 없음`으로 유지한다.
 
+## 2026-05-26 추가 작업: 공보/공약 PDF 수집
+
+정책공약마당(`policy.nec.go.kr`)의 후보자공약 화면에서 실제 후보자별 문서 메타데이터가 내려오는 것을 확인했다. `initUCACommimentList.do` 응답의 `huboid`와 `fileinfo`를 기준으로 기존 후보자 데이터와 직접 매칭하고, PDF 원문은 `https://cdn.nec.go.kr/policy_pdf/...` 공개 CDN URL로 연결했다.
+
+추가 및 변경 파일:
+
+| 파일 | 내용 |
+| --- | --- |
+| `scripts/collect-candidate-documents.mjs` | 전국 후보자 선거공보/5대공약 PDF 메타데이터 수집 |
+| `data/nec/candidate-documents-20260603.json` | 후보자별 공보/공약 문서 링크와 원본 `fileinfo` |
+| `scripts/build-app-dataset-from-nationwide.mjs` | 앱 후보 데이터의 `pamphletPdf`, `pledgePdf`에 문서 링크 병합 |
+| `src/domain/election.test.ts` | 공식 공보/공약 PDF 링크 병합 테스트 |
+
+수집 명령:
+
+```bash
+npm run collect:documents
+npm run build:app-data
+```
+
+수집 결과:
+
+```text
+Collected policy documents for 6271 candidates.
+Matched 6271/7829.
+Pamphlets: 5473, pledges: 617, failures: 0.
+```
+
+앱 데이터셋 병합 결과:
+
+| 항목 | 개수 |
+| --- | ---: |
+| 앱 후보 표시 항목 | 17,904 |
+| 선거공보 PDF 링크 | 7,547 |
+| 5대공약 PDF 링크 | 2,691 |
+
+주의사항:
+
+- `fileinfo`에는 `선거공약서`, `5대공약`, `선거공보`가 함께 들어오며, 빈 `선거공약서`가 먼저 오는 경우가 있어 실제 PDF 경로가 있는 항목을 우선 선택하도록 처리했다.
+- 후보자 7,829명 중 정책공약마당에서 문서 메타데이터가 확인된 후보자는 6,271명이다.
+- 모든 후보가 5대공약 PDF를 제출한 것은 아니며, 일부는 원문 PDF 대신 별도 텍스트자료 식별자만 내려온다.
+
+## 2026-05-26 추가 작업: PostgreSQL 적재 경로 추가
+
+정적 JSON만 읽던 구조에서 운영 DB로 넘어갈 수 있도록 PostgreSQL 스키마, import 스크립트, 서버 데이터 로더를 추가했다. 현재 앱은 `DATABASE_URL`이 있으면 PostgreSQL을 먼저 조회하고, 없거나 조회 실패 시 기존 JSON 데이터셋으로 fallback한다.
+
+추가 및 변경 파일:
+
+| 파일 | 내용 |
+| --- | --- |
+| `db/schema.sql` | 지역, 선거, 후보, 상세정보, 공보/공약 문서, 수집 실행 이력 테이블 |
+| `scripts/import-app-dataset-to-postgres.mjs` | `data/nec/app-election-dataset-20260603.json`을 PostgreSQL에 적재 |
+| `src/server/election-data.ts` | `DATABASE_URL` 기반 DB 조회 및 JSON fallback |
+| `src/domain/db-dataset.ts` | PostgreSQL row를 앱 `Dataset` 타입으로 변환 |
+| `src/domain/db-dataset.test.ts` | DB row -> 앱 데이터셋 변환 테스트 |
+| `docker-compose.yml` | 로컬 PostgreSQL 컨테이너 |
+| `.env.example` | `DATA_OPEN_API_KEY`, `DATABASE_URL` 예시 |
+
+실행 흐름:
+
+```bash
+docker compose up -d postgres
+DATABASE_URL=postgresql://before_you_vote:before_you_vote@localhost:5433/before_you_vote npm run db:import
+npm run dev
+```
+
+설계 판단:
+
+- 후보 기본정보와 상세정보는 분리했다. 상세정보 재수집 시 후보 목록 전체를 다시 쓰지 않아도 된다.
+- 선거와 지역은 `election_regions`로 N:M 연결한다. 시도지사/교육감처럼 여러 지역 선택 화면에 같은 선거가 노출되는 구조를 유지하기 위해서다.
+- 문서는 `candidate_documents`에 `pamphlet`, `pledge` 타입으로 분리했다. 공보 공개일 이후 문서만 재수집해 갱신할 수 있다.
+- Spring Boot API는 아직 붙이지 않았다. 현재는 Next.js 서버 컴포넌트에서 DB를 직접 읽고, 데이터 모델이 안정된 뒤 백엔드 API로 분리하는 편이 비용이 낮다.
+
 ## 다음 작업 후보
 
 우선순위가 높은 순서:
 
-1. 실제 수집 데이터 모델 확정
-2. 선관위 후보자 OpenAPI 수집 스크립트 또는 백엔드 Collector 구현
-3. `policy.nec.go.kr` 후보자공약 JSON 수집
-4. `info.nec.go.kr` 상세 공개자료 수집
-5. PostgreSQL 스키마 작성
-6. 동탄 기준 지역/선거구 매핑 검증
-7. 위치 좌표 -> 주소 -> 선거구 매핑 구현
-8. 미니PC 배포 구성 작성
+1. 실제 PostgreSQL 컨테이너에 import 실행 후 DB 조회 모드 화면 검증
+2. 미니PC 배포용 Dockerfile 및 compose 구성 확장
+3. 위치 좌표 -> 주소 -> 행정동 -> 선거구 매핑 정확도 검증
+4. 공약 텍스트자료 식별자 기반 원문 조회 가능성 추가 확인
+5. 데이터 갱신 명령을 한 번에 실행하는 수집 파이프라인 구성
 
 ## 커밋 전 참고
 

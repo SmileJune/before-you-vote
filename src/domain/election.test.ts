@@ -60,6 +60,24 @@ describe("election domain", () => {
     expect(detail.candidates.every((candidate) => candidate.name.length > 0)).toBe(true);
   });
 
+  it("includes official pamphlet and pledge PDF links when NEC policy data is available", () => {
+    const region = getRegionBySlug(electionDataset, "seoul-mapo-seogyo");
+    const elections = getRegionElections(electionDataset, region.id);
+    const detail = getElectionDetail(electionDataset, findElectionByTitle(elections, "서울특별시장").id);
+    const candidate = detail.candidates.find((item) => item.name === "정원오");
+
+    expect(candidate?.pamphletPdf).toMatchObject({
+      label: "선거공보",
+      status: "available"
+    });
+    expect(candidate?.pamphletPdf?.url).toContain("https://cdn.nec.go.kr/policy_pdf/");
+    expect(candidate?.pledgePdf).toMatchObject({
+      label: "5대공약",
+      status: "available"
+    });
+    expect(candidate?.pledgePdf?.url).toContain("https://cdn.nec.go.kr/policy_pdf/");
+  });
+
   it("returns candidates for education superintendent and district mayor elections", () => {
     const region = getRegionBySlug(electionDataset, "seoul-mapo-seogyo");
     const elections = getRegionElections(electionDataset, region.id);
