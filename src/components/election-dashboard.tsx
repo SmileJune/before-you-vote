@@ -258,7 +258,8 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
             </select>
             {selectedArea ? (
               <p className="mt-2 text-xs leading-5 text-muted">
-                {selectedArea.districtNames.join(", ")} 기준입니다. 출처: {selectedArea.sourceLabel}
+                <span className="block">{selectedArea.districtNames.join(", ")} 기준입니다.</span>
+                <span className="block">출처: {selectedArea.sourceLabel}</span>
               </p>
             ) : (
               <p className="mt-2 text-xs leading-5 text-muted">
@@ -409,7 +410,8 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
                         <DocumentLink label="공개자료" url={candidate.disclosureViewerUrl} status="available" />
                       </div>
                       <p className="mt-3 text-[11px] leading-4 text-muted">
-                        출처: {candidate.source.label} · 수집 {formatCollectedDate(candidate.source.fetchedAt)}
+                        <span className="block">출처: {candidate.source.label}</span>
+                        <span className="block">수집: {formatCollectedDate(candidate.source.fetchedAt)}</span>
                       </p>
                     </article>
                   ))}
