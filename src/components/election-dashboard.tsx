@@ -589,9 +589,11 @@ function DocumentLink({
   status?: "available" | "pending" | "missing";
 }) {
   if (status === "available" && url) {
+    const href = getDocumentLinkHref(url);
+
     return (
       <a
-        href={url}
+        href={href}
         className="flex items-center justify-center gap-1 rounded-md bg-civic px-2 py-2 text-white"
         target="_blank"
         rel="noreferrer"
@@ -612,4 +614,18 @@ function DocumentLink({
   }
 
   return <span className="rounded-md border border-line px-2 py-2 text-muted">없음</span>;
+}
+
+function getDocumentLinkHref(url: string) {
+  try {
+    const sourceUrl = new URL(url);
+
+    if (sourceUrl.protocol === "https:" && sourceUrl.hostname === "cdn.nec.go.kr" && sourceUrl.pathname.endsWith(".pdf")) {
+      return `/api/document-download?url=${encodeURIComponent(url)}`;
+    }
+  } catch {
+    return url;
+  }
+
+  return url;
 }
