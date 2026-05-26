@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "개인정보처리방침 - 투표전5분",
@@ -63,9 +64,9 @@ const sections = [
 export default function PrivacyPage() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-[430px] bg-white px-5 py-6 text-ink shadow-soft">
-      <a href="/" className="text-sm font-semibold text-civic underline underline-offset-2">
+      <Link href="/" className="text-sm font-semibold text-civic underline underline-offset-2">
         투표전5분으로 돌아가기
-      </a>
+      </Link>
       <header className="mt-6 border-b border-line pb-5">
         <p className="text-sm font-semibold text-civic">투표전5분</p>
         <h1 className="mt-2 text-2xl font-bold tracking-normal">개인정보처리방침</h1>

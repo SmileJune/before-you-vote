@@ -47,11 +47,17 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
   const regionElections = getRegionElections(dataset, region.id);
   const areaOptions = getAdministrativeAreaOptions(region.slug);
   const selectedArea = getAdministrativeAreaOption(region.slug, selectedAreaId);
-  const elections = areaOptions.length > 0 ? filterElectionsByAdministrativeArea(regionElections, selectedArea) : regionElections;
+  const shouldRequireAreaSelection = areaOptions.length > 0;
+  const isAreaSelectionMissing = shouldRequireAreaSelection && !selectedArea;
+  const elections = isAreaSelectionMissing
+    ? []
+    : shouldRequireAreaSelection
+      ? filterElectionsByAdministrativeArea(regionElections, selectedArea)
+      : regionElections;
   const selectedElectionId = selection.electionId;
   const activeElectionId = elections.some((item) => item.id === selectedElectionId) ? selectedElectionId : elections[0]?.id ?? "";
-  const election = getElectionDetail(dataset, activeElectionId);
-  const comparison = useMemo(() => buildCandidateComparison(election.candidates), [election.candidates]);
+  const election = activeElectionId ? getElectionDetail(dataset, activeElectionId) : null;
+  const comparison = useMemo(() => buildCandidateComparison(election?.candidates ?? []), [election]);
   const comparisonGridStyle = useMemo(
     () => ({
       gridTemplateColumns: `88px repeat(${comparison.candidates.length}, minmax(120px, 1fr))`,
@@ -94,24 +100,28 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
     const nextRegionElections = getRegionElections(dataset, nextRegion.id);
     const nextAreaOptions = getAdministrativeAreaOptions(nextRegion.slug);
     const nextArea = getAdministrativeAreaOption(nextRegion.slug, areaId);
-    const nextElections =
-      nextAreaOptions.length > 0 ? filterElectionsByAdministrativeArea(nextRegionElections, nextArea) : nextRegionElections;
+    const isNextAreaSelectionMissing = nextAreaOptions.length > 0 && !nextArea;
+    const nextElections = isNextAreaSelectionMissing
+      ? []
+      : nextAreaOptions.length > 0
+        ? filterElectionsByAdministrativeArea(nextRegionElections, nextArea)
+        : nextRegionElections;
 
     updateSelection({
       regionSlug,
       areaId: nextArea ? areaId : "",
-      electionId: nextElections[0]?.id ?? ""
+      electionId: isNextAreaSelectionMissing ? "" : nextElections[0]?.id ?? ""
     });
   }
 
   function handleAreaSelected(areaId: string) {
     const nextArea = getAdministrativeAreaOption(region.slug, areaId);
-    const nextElections = filterElectionsByAdministrativeArea(regionElections, nextArea);
+    const nextElections = nextArea ? filterElectionsByAdministrativeArea(regionElections, nextArea) : [];
 
     updateSelection({
       regionSlug: selectedRegion,
       areaId,
-      electionId: nextElections[0]?.id ?? ""
+      electionId: nextArea ? nextElections[0]?.id ?? "" : ""
     });
   }
 
@@ -205,138 +215,153 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
               </p>
             ) : (
               <p className="mt-2 text-xs leading-5 text-muted">
-                읍면동 선택 전에는 지방의원 지역구 선거를 숨깁니다.
+                읍면동을 선택해야 실제 투표지 기준 선거를 확인할 수 있습니다.
               </p>
             )}
           </div>
         ) : null}
       </section>
 
-      <section className="px-5 py-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold">확인할 선거</h2>
-          <span className="text-xs text-muted">{elections.length}개</span>
-        </div>
-        <div className="mt-3 space-y-2">
-          {elections.map((item) => {
-            const isSelected = item.id === activeElectionId;
-
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleElectionSelected(item.id)}
-                className={`flex w-full items-center justify-between rounded-md border px-4 py-3 text-left ${
-                  isSelected ? "border-civic bg-white ring-2 ring-civic/15" : "border-line bg-white"
-                }`}
-                aria-pressed={isSelected}
-              >
-                <div>
-                  <p className="text-sm font-bold">{item.title}</p>
-                  <p className="mt-1 text-xs text-muted">
-                    {item.category} · {item.districtName}
-                  </p>
-                </div>
-                <ChevronRight className={isSelected ? "text-civic" : "text-muted"} size={18} />
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="bg-white px-5 py-5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-bold">후보 비교</h2>
-          <span className="text-xs text-muted">전체 {comparison.candidates.length}명</span>
-        </div>
-        {comparison.candidates.length >= 2 ? (
-          <div className="mt-3 overflow-x-auto rounded-md border border-line bg-white">
-            <div className="grid border-b border-line bg-paper text-xs font-bold" style={comparisonGridStyle}>
-              <div className="sticky left-0 z-20 border-r border-line bg-paper px-3 py-2">항목</div>
-              {comparison.candidates.map((candidate) => (
-                <div key={candidate.id} className="min-w-0 px-3 py-2">
-                  <span className="block truncate">{candidate.name}</span>
-                </div>
-              ))}
+      {isAreaSelectionMissing ? (
+        <section className="px-5 py-5">
+          <div className="rounded-md border border-line bg-white p-4">
+            <p className="text-sm font-bold">읍면동을 먼저 선택하세요</p>
+            <p className="mt-2 text-xs leading-5 text-muted">
+              같은 시·군·구 안에서도 시·도의원과 구·시·군의원 선거구가 달라집니다. 실제 투표지에 가까운 목록을 보려면 읍면동 선택이 필요합니다.
+            </p>
+          </div>
+        </section>
+      ) : (
+        <>
+          <section className="px-5 py-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold">확인할 선거</h2>
+              <span className="text-xs text-muted">{elections.length}개</span>
             </div>
-            {comparison.rows.map((row) => (
-              <div
-                key={row.label}
-                className="grid border-b border-line text-xs last:border-b-0"
-                style={comparisonGridStyle}
-              >
-                <div className="sticky left-0 z-10 border-r border-line bg-paper px-3 py-2 font-semibold text-muted">{row.label}</div>
-                {row.values.map((value, index) => (
-                  <div key={`${row.label}-${index}`} className="min-w-0 whitespace-pre-line px-3 py-2 leading-5">
-                    {row.label === "정당" ? <PartyBadge partyName={value} /> : value}
+            <div className="mt-3 space-y-2">
+              {elections.map((item) => {
+                const isSelected = item.id === activeElectionId;
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleElectionSelected(item.id)}
+                    className={`flex w-full items-center justify-between rounded-md border px-4 py-3 text-left ${
+                      isSelected ? "border-civic bg-white ring-2 ring-civic/15" : "border-line bg-white"
+                    }`}
+                    aria-pressed={isSelected}
+                  >
+                    <div>
+                      <p className="text-sm font-bold">{item.title}</p>
+                      <p className="mt-1 text-xs text-muted">
+                        {item.category} · {item.districtName}
+                      </p>
+                    </div>
+                    <ChevronRight className={isSelected ? "text-civic" : "text-muted"} size={18} />
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="bg-white px-5 py-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-base font-bold">후보 비교</h2>
+              <span className="text-xs text-muted">전체 {comparison.candidates.length}명</span>
+            </div>
+            {comparison.candidates.length >= 2 ? (
+              <div className="mt-3 overflow-x-auto rounded-md border border-line bg-white">
+                <div className="grid border-b border-line bg-paper text-xs font-bold" style={comparisonGridStyle}>
+                  <div className="sticky left-0 z-20 border-r border-line bg-paper px-3 py-2">항목</div>
+                  {comparison.candidates.map((candidate) => (
+                    <div key={candidate.id} className="min-w-0 px-3 py-2">
+                      <span className="block truncate">{candidate.name}</span>
+                    </div>
+                  ))}
+                </div>
+                {comparison.rows.map((row) => (
+                  <div
+                    key={row.label}
+                    className="grid border-b border-line text-xs last:border-b-0"
+                    style={comparisonGridStyle}
+                  >
+                    <div className="sticky left-0 z-10 border-r border-line bg-paper px-3 py-2 font-semibold text-muted">{row.label}</div>
+                    {row.values.map((value, index) => (
+                      <div key={`${row.label}-${index}`} className="min-w-0 whitespace-pre-line px-3 py-2 leading-5">
+                        {row.label === "정당" ? <PartyBadge partyName={value} /> : value}
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-3 rounded-md border border-line bg-white p-4 text-xs leading-5 text-muted">
-            후보가 2명 이상이면 모든 후보를 같은 항목으로 비교합니다.
-          </div>
-        )}
-      </section>
+            ) : (
+              <div className="mt-3 rounded-md border border-line bg-white p-4 text-xs leading-5 text-muted">
+                후보가 2명 이상이면 모든 후보를 같은 항목으로 비교합니다.
+              </div>
+            )}
+          </section>
 
-      <section id={election.id} className="bg-white px-5 py-5">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold text-civic">{election.ballotName}</p>
-            <h2 className="mt-1 text-xl font-bold">후보별 상세</h2>
-          </div>
-          <span className="rounded-full bg-paper px-3 py-1 text-xs text-muted">기호순</span>
-        </div>
-
-        {election.candidates.length > 0 ? (
-          <div className="mt-4 space-y-3">
-            {election.candidates.map((candidate) => (
-            <article key={candidate.id} className="rounded-md border border-line bg-white p-4">
-              <div className="flex gap-3">
-                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-paper">
-                  {candidate.photoUrl ? (
-                    <Image src={candidate.photoUrl} alt={`${candidate.name} 후보 사진`} fill sizes="64px" className="object-cover" />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-xs text-muted">사진</div>
-                  )}
+          {election ? (
+            <section id={election.id} className="bg-white px-5 py-5">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-civic">{election.ballotName}</p>
+                  <h2 className="mt-1 text-xl font-bold">후보별 상세</h2>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-xs font-semibold text-muted">
-                        {candidate.ballotNumber === null ? `순번 ${candidate.sortOrder ?? "-"}` : `기호 ${candidate.ballotNumber}`}
+                <span className="rounded-full bg-paper px-3 py-1 text-xs text-muted">기호순</span>
+              </div>
+
+              {election.candidates.length > 0 ? (
+                <div className="mt-4 space-y-3">
+                  {election.candidates.map((candidate) => (
+                    <article key={candidate.id} className="rounded-md border border-line bg-white p-4">
+                      <div className="flex gap-3">
+                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-paper">
+                          {candidate.photoUrl ? (
+                            <Image src={candidate.photoUrl} alt={`${candidate.name} 후보 사진`} fill sizes="64px" className="object-cover" />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-xs text-muted">사진</div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-semibold text-muted">
+                                {candidate.ballotNumber === null ? `순번 ${candidate.sortOrder ?? "-"}` : `기호 ${candidate.ballotNumber}`}
+                              </p>
+                              <h3 className="mt-0.5 text-lg font-bold">{candidate.name}</h3>
+                            </div>
+                            <PartyBadge partyName={candidate.partyName} />
+                          </div>
+                        </div>
+                      </div>
+
+                      <CandidateDetailTable candidate={candidate} electionTitle={election.title} districtName={election.districtName} />
+
+                      <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs font-semibold">
+                        <DocumentLink label="공보" url={candidate.pamphletPdf?.url} status={candidate.pamphletPdf?.status} />
+                        <DocumentLink label="5대공약" url={candidate.pledgePdf?.url} status={candidate.pledgePdf?.status} />
+                        <DocumentLink label="공개자료" url={candidate.disclosureViewerUrl} status="available" />
+                      </div>
+                      <p className="mt-3 text-[11px] leading-4 text-muted">
+                        출처: {candidate.source.label} · 수집 {formatCollectedDate(candidate.source.fetchedAt)}
                       </p>
-                      <h3 className="mt-0.5 text-lg font-bold">{candidate.name}</h3>
-                    </div>
-                    <PartyBadge partyName={candidate.partyName} />
-                  </div>
+                    </article>
+                  ))}
                 </div>
-              </div>
-
-              <CandidateDetailTable candidate={candidate} electionTitle={election.title} districtName={election.districtName} />
-
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs font-semibold">
-                <DocumentLink label="공보" url={candidate.pamphletPdf?.url} status={candidate.pamphletPdf?.status} />
-                <DocumentLink label="5대공약" url={candidate.pledgePdf?.url} status={candidate.pledgePdf?.status} />
-                <DocumentLink label="공개자료" url={candidate.disclosureViewerUrl} status="available" />
-              </div>
-              <p className="mt-3 text-[11px] leading-4 text-muted">
-                출처: {candidate.source.label} · 수집 {formatCollectedDate(candidate.source.fetchedAt)}
-              </p>
-            </article>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-4 rounded-md border border-line bg-paper p-4">
-            <p className="text-sm font-bold">후보 데이터 수집 전입니다.</p>
-            <p className="mt-2 text-xs leading-5 text-muted">
-              이 지역의 후보자 목록이 아직 공식 데이터셋에 없습니다. 수집 범위를 확인해 주세요.
-            </p>
-          </div>
-        )}
-      </section>
+              ) : (
+                <div className="mt-4 rounded-md border border-line bg-paper p-4">
+                  <p className="text-sm font-bold">후보 데이터 수집 전입니다.</p>
+                  <p className="mt-2 text-xs leading-5 text-muted">
+                    이 지역의 후보자 목록이 아직 공식 데이터셋에 없습니다. 수집 범위를 확인해 주세요.
+                  </p>
+                </div>
+              )}
+            </section>
+          ) : null}
+        </>
+      )}
 
       <footer className="bg-white px-5 py-5 text-xs leading-5 text-muted">
         <div className="flex gap-2">
@@ -481,7 +506,12 @@ function normalizeDashboardSelection(dataset: Dataset, selection: Partial<Dashbo
   const areaOptions = getAdministrativeAreaOptions(region.slug);
   const areaId = areaOptions.some((option) => option.id === selection.areaId) ? selection.areaId ?? "" : "";
   const area = getAdministrativeAreaOption(region.slug, areaId);
-  const elections = areaOptions.length > 0 ? filterElectionsByAdministrativeArea(regionElections, area) : regionElections;
+  const isAreaSelectionMissing = areaOptions.length > 0 && !area;
+  const elections = isAreaSelectionMissing
+    ? []
+    : areaOptions.length > 0
+      ? filterElectionsByAdministrativeArea(regionElections, area)
+      : regionElections;
   const electionId = elections.some((item) => item.id === selection.electionId) ? selection.electionId ?? "" : elections[0]?.id ?? "";
 
   return {
