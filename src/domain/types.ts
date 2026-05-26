@@ -30,6 +30,7 @@ export type Candidate = {
   name: string;
   partyName: string;
   ballotNumber: number | null;
+  sortOrder?: number;
   job: string;
   education: string;
   career: string;

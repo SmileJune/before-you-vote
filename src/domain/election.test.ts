@@ -6,58 +6,86 @@ import {
   getRegionBySlug,
   getRegionElections
 } from "./election";
-import { sampleDataset } from "./sample-data";
+import { electionDataset } from "./generated-election-data";
+import type { Election } from "./types";
+
+function findElectionByTitle(regionElections: Election[], title: string) {
+  const election = regionElections.find((item) => item.title === title);
+
+  if (!election) {
+    throw new Error(`Missing election title in test dataset: ${title}`);
+  }
+
+  return election;
+}
 
 describe("election domain", () => {
   it("finds a region by slug and returns only elections for that region", () => {
-    const region = getRegionBySlug(sampleDataset, "seoul-mapo-seogyo");
-    const elections = getRegionElections(sampleDataset, region.id);
+    const region = getRegionBySlug(electionDataset, "seoul-mapo-seogyo");
+    const elections = getRegionElections(electionDataset, region.id);
 
-    expect(region.displayName).toBe("서울특별시 마포구 서교동");
-    expect(elections.map((election) => election.title)).toEqual([
+    expect(region.displayName).toBe("서울특별시 마포구");
+    expect(elections.map((election) => election.title)).toEqual(expect.arrayContaining([
       "서울특별시장",
       "서울특별시교육감",
-      "마포구청장"
-    ]);
+      "마포구청장",
+      "서울특별시 광역의원 비례대표",
+      "마포구 기초의원 비례대표"
+    ]));
+    expect(elections).toHaveLength(17);
+  });
+
+  it("finds Dongtan elections by mapped region", () => {
+    const region = getRegionBySlug(electionDataset, "gyeonggi-hwaseong-dongtan");
+    const elections = getRegionElections(electionDataset, region.id);
+
+    expect(region.displayName).toBe("경기도 화성시동탄구");
+    expect(elections.map((election) => election.title)).toEqual(expect.arrayContaining([
+      "경기도지사",
+      "경기도교육감",
+      "화성시장",
+      "경기도 광역의원 비례대표",
+      "화성시 기초의원 비례대표"
+    ]));
+    expect(elections).toHaveLength(11);
   });
 
   it("sorts candidates by ballot number and keeps a deterministic fallback", () => {
-    const detail = getElectionDetail(sampleDataset, "seoul-mayor");
+    const region = getRegionBySlug(electionDataset, "seoul-mapo-seogyo");
+    const elections = getRegionElections(electionDataset, region.id);
+    const detail = getElectionDetail(electionDataset, findElectionByTitle(elections, "서울특별시장").id);
+    const ballotNumbers = detail.candidates.map((candidate) => candidate.ballotNumber ?? Number.MAX_SAFE_INTEGER);
 
-    expect(detail.candidates.map((candidate) => candidate.name)).toEqual([
-      "정원오",
-      "오세훈",
-      "김정철",
-      "유지혜",
-      "이강산",
-      "권영국"
-    ]);
+    expect(ballotNumbers).toEqual([...ballotNumbers].sort((a, b) => a - b));
+    expect(detail.candidates.every((candidate) => candidate.name.length > 0)).toBe(true);
   });
 
   it("returns candidates for education superintendent and district mayor elections", () => {
-    const education = getElectionDetail(sampleDataset, "seoul-education-superintendent");
-    const mapoMayor = getElectionDetail(sampleDataset, "mapo-mayor");
+    const region = getRegionBySlug(electionDataset, "seoul-mapo-seogyo");
+    const elections = getRegionElections(electionDataset, region.id);
+    const education = getElectionDetail(electionDataset, findElectionByTitle(elections, "서울특별시교육감").id);
+    const mapoMayor = getElectionDetail(electionDataset, findElectionByTitle(elections, "마포구청장").id);
 
-    expect(education.candidates.map((candidate) => candidate.name)).toEqual(["강신만", "조희연"]);
-    expect(mapoMayor.candidates.map((candidate) => candidate.name)).toEqual(["유동균", "박강수"]);
+    expect(education.candidates.length).toBeGreaterThan(0);
+    expect(mapoMayor.candidates.length).toBeGreaterThan(0);
+    expect(education.candidates.every((candidate) => candidate.electionId === education.id)).toBe(true);
+    expect(mapoMayor.candidates.every((candidate) => candidate.electionId === mapoMayor.id)).toBe(true);
   });
 
   it("builds neutral quick facts without scoring language", () => {
-    const detail = getElectionDetail(sampleDataset, "seoul-mayor");
+    const region = getRegionBySlug(electionDataset, "seoul-mapo-seogyo");
+    const elections = getRegionElections(electionDataset, region.id);
+    const detail = getElectionDetail(electionDataset, findElectionByTitle(elections, "서울특별시장").id);
     const facts = getCandidateQuickFacts(detail.candidates[0]);
 
-    expect(facts).toEqual([
-      { label: "직업", value: "정당인" },
-      { label: "재산", value: "18.2억" },
-      { label: "병역", value: "군필" },
-      { label: "체납", value: "0원" },
-      { label: "전과", value: "2건" }
-    ]);
+    expect(facts.map((fact) => fact.label)).toEqual(["직업", "재산", "병역", "체납", "전과"]);
     expect(facts.map((fact) => fact.value).join(" ")).not.toMatch(/추천|점수|검증|우수|위험/);
   });
 
   it("keeps official source and fetched timestamp in comparison rows", () => {
-    const detail = getElectionDetail(sampleDataset, "seoul-mayor");
+    const region = getRegionBySlug(electionDataset, "seoul-mapo-seogyo");
+    const elections = getRegionElections(electionDataset, region.id);
+    const detail = getElectionDetail(electionDataset, findElectionByTitle(elections, "서울특별시장").id);
     const comparison = buildCandidateComparison(detail.candidates.slice(0, 2));
 
     expect(comparison.candidates).toHaveLength(2);
@@ -73,7 +101,7 @@ describe("election domain", () => {
       "공보",
       "5대공약"
     ]);
-    expect(comparison.sources.every((source) => source.url.startsWith("https://"))).toBe(true);
+    expect(comparison.sources.every((source) => source.url.startsWith("http"))).toBe(true);
     expect(comparison.sources.every((source) => source.fetchedAt.length > 0)).toBe(true);
   });
 });

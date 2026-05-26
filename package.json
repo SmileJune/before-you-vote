@@ -9,6 +9,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "collect:data": "node scripts/collect-real-data.mjs",
+    "collect:nationwide": "node scripts/collect-nationwide-candidates.mjs",
+    "collect:details": "node scripts/collect-nationwide-candidate-details.mjs",
+    "collect:districts": "node scripts/collect-district-mappings.mjs",
+    "build:app-data": "node scripts/build-app-dataset-from-nationwide.mjs",
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",

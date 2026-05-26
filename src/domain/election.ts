@@ -75,8 +75,10 @@ export function buildCandidateComparison(candidates: Candidate[]): CandidateComp
 function compareCandidatesObjectively(a: Candidate, b: Candidate) {
   const ballotA = a.ballotNumber ?? Number.MAX_SAFE_INTEGER;
   const ballotB = b.ballotNumber ?? Number.MAX_SAFE_INTEGER;
+  const sortA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+  const sortB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
 
-  return ballotA - ballotB || a.name.localeCompare(b.name, "ko") || a.partyName.localeCompare(b.partyName, "ko");
+  return ballotA - ballotB || sortA - sortB || a.name.localeCompare(b.name, "ko") || a.partyName.localeCompare(b.partyName, "ko");
 }
 
 function row(label: string, candidates: Candidate[], getValue: (candidate: Candidate) => string) {

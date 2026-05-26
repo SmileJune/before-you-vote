@@ -249,6 +249,258 @@ http://localhost:3000
 - 현재 위치 좌표의 역지오코딩
 - 배포용 systemd/nginx 설정
 
+## 2026-05-26 추가 작업: 샘플 데이터 제거 및 실데이터 생성
+
+샘플 후보 데이터를 제거하고, 선관위 공식 출처 기반 생성 데이터셋으로 전환했다.
+
+추가 파일:
+
+| 파일 | 내용 |
+| --- | --- |
+| `scripts/collect-real-data.mjs` | 선관위 OpenAPI와 후보자 상세 페이지를 호출해 정적 데이터셋 생성 |
+| `src/domain/generated-election-data.ts` | 공식 출처 기반 생성 데이터셋 |
+| `src/domain/geolocation.ts` | 좌표 범위 기반 지원 지역 매핑 |
+| `src/domain/geolocation.test.ts` | 동탄/서교동 좌표 매핑 테스트 |
+
+수집 명령:
+
+```bash
+npm run collect:data
+```
+
+현재 수집 범위:
+
+- 서울특별시 마포구 서교동 기준
+  - 서울특별시장
+  - 서울특별시교육감
+  - 마포구청장
+- 경기도 화성시 동탄동 기준
+  - 경기도지사
+  - 경기도교육감
+  - 화성시장
+
+수집 결과:
+
+```text
+Collected 26 candidates into src/domain/generated-election-data.ts
+```
+
+수집 데이터:
+
+- 후보자 기본정보: 후보자 OpenAPI
+- 재산, 병역, 납세, 체납, 전과, 사진: 선거통계시스템 후보자 상세 페이지
+- 출처 URL과 수집 시각: 후보자별 저장
+
+위치 기반 지역 찾기는 외부 지도 API 없이 bounding box 방식으로 먼저 구현했다.
+
+```text
+동탄 좌표 -> 경기도 화성시 동탄동
+서교동 좌표 -> 서울특별시 마포구 서교동
+지원 범위 밖 좌표 -> 수동 선택 안내
+```
+
+브라우저 확인:
+
+- 기본 진입: 서울특별시장 후보 6명 표시
+- 동탄 좌표 mock: 경기도 화성시 동탄동으로 변경
+- 동탄 매핑 후 경기도지사 후보 5명 표시
+
+## 2026-05-26 추가 작업: 전국 후보자 기본정보 수집
+
+전국 후보자 기본정보 수집 스크립트를 추가했다.
+
+추가 파일:
+
+| 파일 | 내용 |
+| --- | --- |
+| `scripts/collect-nationwide-candidates.mjs` | 전국 후보자 기본정보 수집 |
+| `data/nec/nationwide-candidates-20260603.json` | 전국 후보자 기본정보 원천 데이터 |
+| `data/nec/nationwide-summary-20260603.json` | 시도/선거종류별 수집 요약 |
+
+수집 명령:
+
+```bash
+npm run collect:nationwide
+```
+
+수집 범위:
+
+- 17개 시도
+- 국회의원선거
+- 시·도지사선거
+- 구·시·군의 장선거
+- 시·도의회의원선거
+- 구·시·군의회의원선거
+- 광역의원비례대표선거
+- 기초의원비례대표선거
+- 교육감선거
+
+수집 결과:
+
+```text
+Collected 7829 nationwide candidates.
+Wrote data/nec/nationwide-candidates-20260603.json
+Wrote data/nec/nationwide-summary-20260603.json
+```
+
+구현 중 확인한 사항:
+
+- 일부 시도/선거종류 조합은 후보가 없어 `INFO-03`을 반환한다. 이는 빈 결과로 처리했다.
+- OpenAPI가 `numOfRows=1000` 요청을 받아도 실제로는 100개 단위로 제한하는 케이스가 있어, 응답의 실제 `numOfRows`를 기준으로 페이지네이션하도록 수정했다.
+- 전국 파일은 후보자 OpenAPI 기본정보 기준이다. 재산, 병역, 납세, 체납, 전과 상세 공개자료는 후보자 상세 페이지 호출량이 크므로 별도 수집 단계로 분리해야 한다.
+
+## 2026-05-26 추가 작업: 전국 앱 데이터셋과 지역 직접 선택
+
+전국 후보자 기본정보 원천 파일을 앱에서 바로 사용할 수 있는 지역/선거/후보 데이터셋으로 변환했다. 기존 화면은 직접 선택 지역이 서울 마포구와 경기 동탄 2개뿐이었으나, 현재는 후보자 OpenAPI의 `sdName`, `wiwName`, `sggName` 기준으로 생성한 312개 지역을 선택할 수 있다.
+
+추가 및 변경 파일:
+
+| 파일 | 내용 |
+| --- | --- |
+| `scripts/build-app-dataset-from-nationwide.mjs` | 전국 후보자 원천 데이터를 앱 데이터셋으로 변환 |
+| `data/nec/app-election-dataset-20260603.json` | 앱에서 사용하는 지역/선거/후보 정규화 JSON |
+| `src/domain/generated-election-data.ts` | JSON 데이터셋을 읽는 얇은 로더 |
+| `src/components/election-dashboard.tsx` | 지역 직접 선택을 312개 지역 select로 변경 |
+
+생성 명령:
+
+```bash
+npm run build:app-data
+```
+
+생성 결과:
+
+```text
+Generated 312 regions, 3209 elections, 17904 candidate entries.
+```
+
+브라우저 확인:
+
+- 지역 직접 선택 옵션 수: 312개
+- 기본 서울특별시 마포구 선택 시 표시 선거: 17개
+- 경기도 화성시동탄구 선택 시 표시 선거: 11개
+
+경기도 화성시동탄구 표시 선거:
+
+- 경기도지사
+- 경기도교육감
+- 화성시장
+- 화성시제3선거구 시·도의원
+- 화성시제4선거구 시·도의원
+- 화성시제5선거구 시·도의원
+- 화성시다선거구 구·시·군의원
+- 화성시라선거구 구·시·군의원
+- 화성시마선거구 구·시·군의원
+- 경기도 광역의원 비례대표
+- 화성시 기초의원 비례대표
+
+빌드 이슈와 조치:
+
+- 처음에는 `src/domain/generated-election-data.ts`에 48만 줄 규모의 객체 리터럴을 생성해 Next production build가 데이터 파싱 단계에서 오래 멈췄다.
+- 데이터 본문을 JSON 파일로 분리하고 TypeScript 파일은 `readFileSync` 기반 로더로 축소했다.
+- 수정 후 `next build` 컴파일은 약 1.3초에 완료됐다.
+
+현재 한계:
+
+- 지역 목록은 선관위 후보자 OpenAPI에 포함된 행정/선거구명 조합으로 만든 것이다.
+- 읍면동 주소를 개별 시도의원/구시군의원 선거구 하나로 정확히 좁히는 매핑은 아직 없다.
+- 따라서 특정 시군구/분구 선택 시 해당 하위 지방의원 선거구가 여러 개 함께 표시될 수 있다.
+
+## 2026-05-26 추가 작업: 읍면동-선거구 매핑 수집
+
+선거구명을 사용자가 직접 선택하게 하는 방식은 실제 사용성에 맞지 않으므로 제거했다. 사용자는 시군구/구 단위 지역을 선택한 뒤 읍면동만 선택하고, 앱이 해당 읍면동의 시도의원/구시군의원 선거구를 자동으로 적용한다.
+
+추가 및 변경 파일:
+
+| 파일 | 내용 |
+| --- | --- |
+| `scripts/collect-district-mappings.mjs` | 시도 선관위 홈페이지에서 구시군위원회 선거관리현황을 수집 |
+| `data/nec/district-mappings-20260603.json` | 읍면동별 지방의원 선거구 매핑 데이터 |
+| `src/domain/generated-district-mappings.ts` | 매핑 JSON 로더 |
+| `src/domain/district-mapping.ts` | 읍면동 선택 기반 선거 목록 필터링 |
+| `src/domain/district-mapping.test.ts` | 마포구/동탄구/이천시 매핑 검증 |
+
+수집 명령:
+
+```bash
+npm run collect:districts
+```
+
+수집 결과:
+
+```text
+Collected district mappings for 243 regions.
+Failures: 0
+```
+
+수집 방식:
+
+- 각 시도 선관위 메인 페이지에서 구시군위원회 소개 링크를 찾는다.
+- 구시군위원회 목록에서 개별 위원회 페이지를 찾는다.
+- 개별 위원회 메뉴의 `선거관리현황` 페이지를 찾는다.
+- 해당 페이지의 `도의원/시의원/구시군의원 선거구` 표에서 선거구명과 읍면동 목록을 파싱한다.
+- 앱 후보 데이터의 선거구명과 매칭되는 항목만 `district-mappings-20260603.json`에 저장한다.
+
+브라우저 확인:
+
+- 경기도 이천시 선택 직후: 공통 선거 5개 표시
+- `중리동` 선택 후: `이천시제1선거구`, `이천시나선거구`가 자동 적용되어 7개 표시
+
+검증 명령:
+
+```bash
+npm test
+npm run lint
+npm run build
+npm audit --omit=dev
+```
+
+결과:
+
+- `npm test`: 14 tests 통과
+- `npm run lint`: 통과
+- `npm run build`: 통과
+- `npm audit --omit=dev`: production dependency 기준 0 vulnerabilities
+
+## 2026-05-26 추가 작업: 전국 후보자 상세 공개정보 수집
+
+전국 후보자 기본정보만으로는 재산, 병역, 납세, 체납, 전과, 사진 값이 대부분 `자료 없음`으로 남았다. 후보자별 선거통계시스템 상세 페이지를 호출해 상세 공개정보를 수집하고, 앱 데이터셋 생성 단계에서 병합하도록 수정했다.
+
+추가 및 변경 파일:
+
+| 파일 | 내용 |
+| --- | --- |
+| `scripts/collect-nationwide-candidate-details.mjs` | 전국 후보자 상세 공개정보 수집 |
+| `data/nec/nationwide-candidate-details-20260603.json` | 후보자별 재산/병역/납세/체납/전과/사진 상세값 |
+| `scripts/build-app-dataset-from-nationwide.mjs` | 상세 공개정보를 앱 후보 데이터에 병합 |
+
+수집 명령:
+
+```bash
+npm run collect:details
+npm run build:app-data
+```
+
+수집 결과:
+
+```text
+Collected 7829/7829 candidate details.
+Failures: 0
+```
+
+상세값 병합 결과:
+
+| 항목 | 후보 상세 원본 기준 | 앱 후보 엔트리 기준 |
+| --- | ---: | ---: |
+| 재산 | 7,805 / 7,829 | 17,867 / 17,904 |
+| 병역 | 7,805 / 7,829 | 17,867 / 17,904 |
+| 납세 | 7,805 / 7,829 | 17,867 / 17,904 |
+| 현 체납 | 7,805 / 7,829 | 17,867 / 17,904 |
+| 전과 | 7,805 / 7,829 | 17,867 / 17,904 |
+| 사진 | 7,805 / 7,829 | 17,867 / 17,904 |
+
+남은 24명은 상세 페이지 자체에 해당 공개정보 표가 없어 `자료 없음`으로 유지한다.
+
 ## 다음 작업 후보
 
 우선순위가 높은 순서:

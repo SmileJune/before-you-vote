@@ -10,18 +10,64 @@ import {
   getRegionBySlug,
   getRegionElections
 } from "@/domain/election";
-import { sampleDataset } from "@/domain/sample-data";
+import {
+  filterElectionsByAdministrativeArea,
+  getAdministrativeAreaOption,
+  getAdministrativeAreaOptions
+} from "@/domain/district-mapping";
+import type { Dataset } from "@/domain/types";
 import { LocationAssist } from "@/components/location-assist";
 
 const selectedRegionSlug = "seoul-mapo-seogyo";
-const initialElectionId = "seoul-mayor";
 
-export function ElectionDashboard() {
-  const region = getRegionBySlug(sampleDataset, selectedRegionSlug);
-  const elections = getRegionElections(sampleDataset, region.id);
-  const [selectedElectionId, setSelectedElectionId] = useState(initialElectionId);
-  const election = getElectionDetail(sampleDataset, selectedElectionId);
+type ElectionDashboardProps = {
+  dataset: Dataset;
+};
+
+export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
+  const [selectedRegion, setSelectedRegion] = useState(selectedRegionSlug);
+  const [selectedAreaId, setSelectedAreaId] = useState("");
+  const region = getRegionBySlug(dataset, selectedRegion);
+  const regionElections = getRegionElections(dataset, region.id);
+  const areaOptions = getAdministrativeAreaOptions(region.slug);
+  const selectedArea = getAdministrativeAreaOption(region.slug, selectedAreaId);
+  const elections = areaOptions.length > 0 ? filterElectionsByAdministrativeArea(regionElections, selectedArea) : regionElections;
+  const [selectedElectionId, setSelectedElectionId] = useState(elections[0]?.id ?? "");
+  const activeElectionId = elections.some((item) => item.id === selectedElectionId) ? selectedElectionId : elections[0]?.id ?? "";
+  const election = getElectionDetail(dataset, activeElectionId);
   const comparison = useMemo(() => buildCandidateComparison(election.candidates.slice(0, 2)), [election.candidates]);
+  const regionsBySido = useMemo(() => {
+    const grouped = new Map<string, Dataset["regions"]>();
+
+    for (const item of dataset.regions) {
+      grouped.set(item.sido, [...(grouped.get(item.sido) ?? []), item]);
+    }
+
+    return [...grouped.entries()];
+  }, [dataset.regions]);
+
+  function handleRegionMapped(regionSlug: string) {
+    handleRegionSelected(regionSlug);
+  }
+
+  function handleRegionSelected(regionSlug: string) {
+    const nextRegion = getRegionBySlug(dataset, regionSlug);
+    const nextRegionElections = getRegionElections(dataset, nextRegion.id);
+    const nextAreaOptions = getAdministrativeAreaOptions(nextRegion.slug);
+    const nextElections = nextAreaOptions.length > 0 ? filterElectionsByAdministrativeArea(nextRegionElections, null) : nextRegionElections;
+
+    setSelectedRegion(regionSlug);
+    setSelectedAreaId("");
+    setSelectedElectionId(nextElections[0]?.id ?? "");
+  }
+
+  function handleAreaSelected(areaId: string) {
+    const nextArea = getAdministrativeAreaOption(region.slug, areaId);
+    const nextElections = filterElectionsByAdministrativeArea(regionElections, nextArea);
+
+    setSelectedAreaId(areaId);
+    setSelectedElectionId(nextElections[0]?.id ?? "");
+  }
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-[430px] flex-col bg-paper text-ink shadow-soft">
@@ -38,21 +84,73 @@ export function ElectionDashboard() {
         <p className="mt-3 text-sm leading-6 text-muted">
           공식 자료 기준으로 같은 항목을 나란히 보여줍니다. 후보 추천이나 점수화는 하지 않습니다.
         </p>
-        <LocationAssist />
+        <LocationAssist onRegionMapped={handleRegionMapped} />
       </section>
 
       <section className="border-y border-line bg-white px-5 py-4">
         <div className="flex items-start gap-3">
           <MapPin className="mt-0.5 shrink-0 text-civic" size={20} />
           <div>
-            <p className="text-xs font-semibold text-muted">현재 선택 지역 · 데모 데이터</p>
+            <p className="text-xs font-semibold text-muted">현재 선택 지역</p>
             <h2 className="mt-1 text-lg font-bold">{region.displayName}</h2>
             <p className="mt-1 text-xs leading-5 text-muted">{region.notice}</p>
-            <p className="mt-1 text-xs leading-5 text-muted">
-              위치 확인은 좌표까지만 동작합니다. 동탄 후보를 보려면 주소-선거구 매핑 데이터와 화성시 후보 데이터가 필요합니다.
-            </p>
+            {areaOptions.length > 0 ? (
+              <p className="mt-1 text-xs leading-5 text-muted">
+                읍면동에 따라 지방의원 선거구가 갈립니다. 아래 읍면동을 선택하면 실제로 볼 선거만 남깁니다.
+              </p>
+            ) : null}
           </div>
         </div>
+        <div className="mt-4">
+          <label htmlFor="region-select" className="text-xs font-semibold text-muted">
+            지역 직접 선택
+          </label>
+          <select
+            id="region-select"
+            value={selectedRegion}
+            onChange={(event) => handleRegionSelected(event.target.value)}
+            className="mt-2 w-full rounded-md border border-line bg-paper px-3 py-3 text-sm font-semibold text-ink"
+          >
+            {regionsBySido.map(([sido, items]) => (
+              <optgroup key={sido} label={sido}>
+                {items.map((item) => (
+                  <option key={item.id} value={item.slug}>
+                    {item.displayName}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+        {areaOptions.length > 0 ? (
+          <div className="mt-4 rounded-md border border-line bg-paper p-3">
+            <label htmlFor="area-select" className="text-xs font-semibold text-muted">
+              읍면동 선택
+            </label>
+            <select
+              id="area-select"
+              value={selectedAreaId}
+              onChange={(event) => handleAreaSelected(event.target.value)}
+              className="mt-2 w-full rounded-md border border-line bg-white px-3 py-3 text-sm font-semibold text-ink"
+            >
+              <option value="">읍면동을 선택하세요</option>
+              {areaOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {selectedArea ? (
+              <p className="mt-2 text-xs leading-5 text-muted">
+                {selectedArea.districtNames.join(", ")} 기준입니다. 출처: {selectedArea.sourceLabel}
+              </p>
+            ) : (
+              <p className="mt-2 text-xs leading-5 text-muted">
+                읍면동 선택 전에는 지방의원 지역구 선거를 숨깁니다.
+              </p>
+            )}
+          </div>
+        ) : null}
       </section>
 
       <section className="px-5 py-5">
@@ -62,7 +160,7 @@ export function ElectionDashboard() {
         </div>
         <div className="mt-3 space-y-2">
           {elections.map((item) => {
-            const isSelected = item.id === selectedElectionId;
+            const isSelected = item.id === activeElectionId;
 
             return (
               <button
@@ -96,8 +194,9 @@ export function ElectionDashboard() {
           <span className="rounded-full bg-paper px-3 py-1 text-xs text-muted">기호순</span>
         </div>
 
-        <div className="mt-4 space-y-3">
-          {election.candidates.map((candidate) => (
+        {election.candidates.length > 0 ? (
+          <div className="mt-4 space-y-3">
+            {election.candidates.map((candidate) => (
             <article key={candidate.id} className="rounded-md border border-line bg-white p-4">
               <div className="flex gap-3">
                 <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-paper">
@@ -110,7 +209,9 @@ export function ElectionDashboard() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-xs font-semibold text-muted">기호 {candidate.ballotNumber ?? "-"}</p>
+                      <p className="text-xs font-semibold text-muted">
+                        {candidate.ballotNumber === null ? `순번 ${candidate.sortOrder ?? "-"}` : `기호 ${candidate.ballotNumber}`}
+                      </p>
                       <h3 className="mt-0.5 text-lg font-bold">{candidate.name}</h3>
                     </div>
                     <span className="shrink-0 rounded-full border border-line px-2 py-1 text-xs">{candidate.partyName}</span>
@@ -135,13 +236,22 @@ export function ElectionDashboard() {
                 출처: {candidate.source.label} · 수집 {candidate.source.fetchedAt}
               </p>
             </article>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-md border border-line bg-paper p-4">
+            <p className="text-sm font-bold">후보 데이터 수집 전입니다.</p>
+            <p className="mt-2 text-xs leading-5 text-muted">
+              이 지역의 후보자 목록이 아직 공식 데이터셋에 없습니다. 수집 범위를 확인해 주세요.
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="px-5 py-5">
         <h2 className="text-base font-bold">빠른 비교</h2>
-        <div className="mt-3 overflow-hidden rounded-md border border-line bg-white">
+        {comparison.candidates.length > 0 ? (
+          <div className="mt-3 overflow-hidden rounded-md border border-line bg-white">
           <div className="grid grid-cols-[88px_1fr_1fr] border-b border-line bg-paper text-xs font-bold">
             <div className="px-3 py-2">항목</div>
             {comparison.candidates.map((candidate) => (
@@ -160,7 +270,12 @@ export function ElectionDashboard() {
               ))}
             </div>
           ))}
-        </div>
+          </div>
+        ) : (
+          <div className="mt-3 rounded-md border border-line bg-white p-4 text-xs leading-5 text-muted">
+            후보 데이터가 수집되면 동일 선거구 후보를 같은 항목으로 비교합니다.
+          </div>
+        )}
       </section>
 
       <footer className="bg-white px-5 py-5 text-xs leading-5 text-muted">
