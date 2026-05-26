@@ -15,6 +15,7 @@ import {
   getAdministrativeAreaOptions
 } from "@/domain/district-mapping";
 import { resolveReverseGeocodedRegion, type ReverseGeocodedRegion } from "@/domain/reverse-geocode";
+import { getSubregionOptions } from "@/domain/region-hierarchy";
 import type { Candidate, CandidateDocument, Dataset } from "@/domain/types";
 import { LocationAssist } from "@/components/location-assist";
 import { getPartyColor } from "@/domain/party-colors";
@@ -45,7 +46,7 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
   const selectedAreaId = selection.areaId;
   const region = getRegionBySlug(dataset, selectedRegion);
   const regionElections = getRegionElections(dataset, region.id);
-  const subregionOptions = getSubregionOptions(dataset, region);
+  const subregionOptions = getSubregionOptions(dataset.regions, region);
   const areaOptions = getAdministrativeAreaOptions(region.slug);
   const selectedArea = getAdministrativeAreaOption(region.slug, selectedAreaId);
   const isSubregionSelectionMissing = subregionOptions.length > 0;
@@ -101,7 +102,7 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
   function selectRegion(regionSlug: string, areaId = "") {
     const nextRegion = getRegionBySlug(dataset, regionSlug);
     const nextRegionElections = getRegionElections(dataset, nextRegion.id);
-    const nextSubregionOptions = getSubregionOptions(dataset, nextRegion);
+    const nextSubregionOptions = getSubregionOptions(dataset.regions, nextRegion);
     const nextAreaOptions = getAdministrativeAreaOptions(nextRegion.slug);
     const nextArea = getAdministrativeAreaOption(nextRegion.slug, areaId);
     const isNextSubregionSelectionMissing = nextSubregionOptions.length > 0;
@@ -541,24 +542,12 @@ type LocationMapping =
       displayName: string;
     };
 
-function getSubregionOptions(dataset: Dataset, region: Dataset["regions"][number]) {
-  return dataset.regions
-    .filter(
-      (item) =>
-        item.sido === region.sido &&
-        item.slug !== region.slug &&
-        item.sigungu.startsWith(region.sigungu) &&
-        item.sigungu.length > region.sigungu.length
-    )
-    .sort((left, right) => left.displayName.localeCompare(right.displayName, "ko"));
-}
-
 function normalizeDashboardSelection(dataset: Dataset, selection: Partial<DashboardSelection>): DashboardSelection {
   const regionSlug =
     selection.regionSlug && dataset.regions.some((item) => item.slug === selection.regionSlug) ? selection.regionSlug : selectedRegionSlug;
   const region = getRegionBySlug(dataset, regionSlug);
   const regionElections = getRegionElections(dataset, region.id);
-  const subregionOptions = getSubregionOptions(dataset, region);
+  const subregionOptions = getSubregionOptions(dataset.regions, region);
   const areaOptions = getAdministrativeAreaOptions(region.slug);
   const areaId = areaOptions.some((option) => option.id === selection.areaId) ? selection.areaId ?? "" : "";
   const area = getAdministrativeAreaOption(region.slug, areaId);
