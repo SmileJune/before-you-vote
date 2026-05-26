@@ -2,13 +2,34 @@
 
 import { LocateFixed } from "lucide-react";
 import { useState } from "react";
+import type { ReverseGeocodedRegion } from "@/domain/reverse-geocode";
 import { mapCoordinatesToRegion } from "@/domain/geolocation";
 
 type LocationState = "idle" | "requesting" | "ready" | "unsupported" | "blocked";
 
 type LocationAssistProps = {
-  onRegionMapped: (regionSlug: string) => void;
+  onRegionMapped: (mapping: LocationMapping) => boolean;
 };
+
+type LocationMapping =
+  | {
+      type: "reverse-geocoded";
+      address: ReverseGeocodedRegion;
+    }
+  | {
+      type: "fallback";
+      regionSlug: string;
+      areaId?: string;
+      displayName: string;
+    };
+
+type ReverseGeocodeApiResponse =
+  | ({
+      status: "mapped";
+    } & ReverseGeocodedRegion)
+  | {
+      status: "unsupported" | "unconfigured" | "failed" | "invalid_request";
+    };
 
 export function LocationAssist({ onRegionMapped }: LocationAssistProps) {
   const [state, setState] = useState<LocationState>("idle");
@@ -22,17 +43,48 @@ export function LocationAssist({ onRegionMapped }: LocationAssistProps) {
 
     setState("requesting");
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
+        const reverseGeocoded = await reverseGeocodeCoordinates({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        });
+
+        if (reverseGeocoded?.status === "mapped") {
+          const isMapped = onRegionMapped({
+            type: "reverse-geocoded",
+            address: {
+              sido: reverseGeocoded.sido,
+              sigungu: reverseGeocoded.sigungu,
+              eupmyeondong: reverseGeocoded.eupmyeondong,
+              addressName: reverseGeocoded.addressName
+            }
+          });
+
+          if (isMapped) {
+            setMappedName(reverseGeocoded.addressName);
+            setState("ready");
+            return;
+          }
+        }
+
         const result = mapCoordinatesToRegion({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude
         });
 
         if (result.status === "mapped") {
-          setMappedName(result.displayName);
-          setState("ready");
-          onRegionMapped(result.regionSlug);
-          return;
+          const isMapped = onRegionMapped({
+            type: "fallback",
+            regionSlug: result.regionSlug,
+            areaId: result.areaId,
+            displayName: result.displayName
+          });
+
+          if (isMapped) {
+            setMappedName(result.displayName);
+            setState("ready");
+            return;
+          }
         }
 
         setMappedName(null);
@@ -56,6 +108,24 @@ export function LocationAssist({ onRegionMapped }: LocationAssistProps) {
       <p className="mt-2 text-xs leading-5 text-muted">{state === "ready" && mappedName ? `${mappedName}으로 추정했습니다.` : messageByState[state]}</p>
     </div>
   );
+}
+
+async function reverseGeocodeCoordinates(coordinates: { latitude: number; longitude: number }) {
+  const url = new URL("/api/reverse-geocode", window.location.origin);
+  url.searchParams.set("latitude", String(coordinates.latitude));
+  url.searchParams.set("longitude", String(coordinates.longitude));
+
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.json()) as ReverseGeocodeApiResponse;
+  } catch {
+    return null;
+  }
 }
 
 const messageByState: Record<LocationState, string> = {

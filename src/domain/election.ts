@@ -60,10 +60,10 @@ export function buildCandidateComparison(candidates: Candidate[]): CandidateComp
     row("학력", ordered, (candidate) => candidate.education),
     row("공보", ordered, (candidate) => formatDocumentStatus(candidate.pamphletPdf?.status)),
     row("5대공약", ordered, (candidate) => formatDocumentStatus(candidate.pledgePdf?.status)),
-    row("재산", ordered, (candidate) => candidate.assets?.display ?? "자료 없음"),
-    row("병역", ordered, (candidate) => candidate.military ?? "자료 없음"),
-    row("납세", ordered, (candidate) => candidate.taxPaid?.display ?? "자료 없음"),
-    row("체납", ordered, (candidate) => candidate.taxArrearsCurrent?.display ?? "자료 없음"),
+    row("재산", ordered, (candidate) => candidate.assets?.display ?? "-"),
+    row("병역", ordered, (candidate) => candidate.military ?? "-"),
+    row("납세", ordered, (candidate) => candidate.taxPaid?.display ?? "-"),
+    row("체납", ordered, (candidate) => candidate.taxArrearsCurrent?.display ?? "-"),
     row("전과", ordered, (candidate) => formatCriminalRecord(candidate.criminalRecordCount))
   ];
 
@@ -80,7 +80,7 @@ function buildPledgeCategoryRows(candidates: Candidate[]) {
   const orderedCategories = categoryOrder.filter((category) => availableCategories.has(category));
 
   return orderedCategories.map((category) =>
-    row(`공약/${category}`, candidates, (candidate) => formatPledgesByCategory(candidate, category))
+    row(`공약(${category})`, candidates, (candidate) => formatPledgesByCategory(candidate, category))
   );
 }
 
@@ -89,7 +89,7 @@ function formatPledgesByCategory(candidate: Candidate, category: string) {
     .filter((pledge) => pledge.category === category)
     .map((pledge) => pledge.title);
 
-  return titles.length > 0 ? titles.join("\n") : "자료 없음";
+  return titles.length > 0 ? titles.join("\n") : "-";
 }
 
 function compareCandidatesObjectively(a: Candidate, b: Candidate) {
@@ -110,7 +110,7 @@ function row(label: string, candidates: Candidate[], getValue: (candidate: Candi
 
 function formatCriminalRecord(count: number | null) {
   if (count === null) {
-    return "자료 없음";
+    return "-";
   }
 
   return `${count}건`;
@@ -125,7 +125,7 @@ function formatDocumentStatus(status: CandidateDocument["status"] | undefined) {
     return "공개 예정";
   }
 
-  return "미제출/없음";
+  return "-";
 }
 
 function dedupeSources(sources: OfficialSource[]) {

@@ -2,6 +2,8 @@
 
 투표장 가기 전 5분, 내가 투표할 후보와 공약을 빠르게 확인하는 웹 서비스입니다.
 
+서비스 주소: https://before-you-vote.vercel.app
+
 이 프로젝트는 2026년 6월 3일 실시 예정인 대한민국 제9회 전국동시지방선거를 대비해, 유권자가 자신의 지역 후보자 정보를 쉽고 빠르게 확인할 수 있도록 돕는 것을 목표로 합니다.
 
 서비스는 특정 후보를 추천하거나 평가하지 않습니다. 중앙선거관리위원회 등 공식 출처에서 제공하는 정보를 보기 좋게 정리하고, 후보자 간 동일한 기준의 비교 화면을 제공하는 데 집중합니다.
@@ -229,6 +231,11 @@ AI 요약은 유용하지만 정치 정보에서는 오해와 누락의 위험�
 - Node.js 20.9 이상
 - 권장: `.nvmrc`의 Node.js 22.22.0
 
+선택 환경 변수:
+
+- `DATA_OPEN_API_KEY`: 중앙선거관리위원회 후보자 OpenAPI 수집용
+- `KAKAO_REST_API_KEY`: 현재 위치 좌표를 행정동으로 변환하는 Kakao Local API용
+
 명령:
 
 ```bash
@@ -365,36 +372,11 @@ npm run collect:districts
 - 중앙선거관리위원회 선거통계시스템 후보자 상세 페이지
 - 중앙선거관리위원회 정책공약마당 후보자공약 JSON
 
-### PostgreSQL Import
+### JSON Dataset Runtime
 
-앱은 기본적으로 생성된 JSON 데이터셋을 읽습니다. `DATABASE_URL`이 설정되어 있으면 PostgreSQL에서 먼저 조회하고, DB 조회에 실패하면 JSON으로 fallback합니다.
+앱은 배포 시 생성된 JSON 데이터셋만 읽습니다. 별도 데이터베이스 서버 없이 `data/nec/app-election-dataset-20260603.json`을 서버 렌더링 단계에서 로드합니다.
 
-로컬 PostgreSQL 실행:
-
-```bash
-docker compose up -d postgres
-```
-
-현재 JSON 데이터셋을 PostgreSQL로 적재:
-
-```bash
-DATABASE_URL=postgresql://before_you_vote:before_you_vote@localhost:5433/before_you_vote npm run db:import
-```
-
-스키마 파일:
-
-- `db/schema.sql`
-
-주요 테이블:
-
-- `regions`
-- `elections`
-- `election_regions`
-- `candidates`
-- `candidate_details`
-- `candidate_documents`
-- `candidate_pledges`
-- `collection_runs`
+전체 DB 스냅샷에서 옮긴 보존용 데이터는 `data/nec/db-export-20260603.json`에 남겨 두었습니다. 앱 실행에는 사용하지 않습니다.
 
 주의:
 
@@ -406,63 +388,18 @@ DATABASE_URL=postgresql://before_you_vote:before_you_vote@localhost:5433/before_
 
 Next.js는 SEO, 공유 가능한 후보자 상세 페이지, 정적/서버 렌더링 조합을 고려해 사용합니다.
 
-### Backend
-
-- Java 17
-- Spring Boot
-- Spring Web
-- Spring Data JPA
-- Spring Scheduler 또는 Spring Batch
-
-백엔드는 후보자 데이터 조회 API와 공식 데이터 수집 로직을 담당합니다.
-
-### Database
-
-- PostgreSQL
-
-후보자, 선거, 선거구, 지역, 공약, 원본 데이터를 저장합니다.
-
-### Cache
-
-- Redis
-
-자주 조회되는 후보자 목록, 지역별 후보자 정보, 선거 종류 목록 등을 캐싱합니다. 초기 MVP에서는 선택적으로 적용합니다.
-
-### Search
-
-- 초기: PostgreSQL 기반 검색
-- 이후: Elasticsearch 또는 OpenSearch
-
-후보자 이름, 지역, 정당, 선거구 검색을 고도화할 때 검색 엔진을 추가합니다.
-
-### Infra
-
-초기 개발 환경은 Docker Compose를 사용합니다.
-
-구성 요소:
-
-- frontend
-- backend
-- postgresql
-- redis
-- opensearch 또는 elasticsearch
-
 ## 전체 아키텍처
 
 ```mermaid
 flowchart TD
     A[중앙선관위 Open API] --> B[Data Collector / Scheduler]
-    B --> C[Raw Data Storage]
-    C --> D[Normalizer]
-    D --> E[(PostgreSQL)]
-    D --> F[(OpenSearch / Elasticsearch)]
-    E --> G[Spring Boot API Server]
-    F --> G
-    G --> H[Next.js Web]
-    G --> I[(Redis Cache)]
+    B --> C[Raw JSON Files]
+    C --> D[App Dataset Builder]
+    D --> E[data/nec/app-election-dataset-20260603.json]
+    E --> F[Next.js Web]
 ```
 
-## 데이터 설계 초안
+## 데이터 설계
 
 ### Election
 
@@ -545,73 +482,21 @@ flowchart TD
 - collected_at
 - checksum
 
-## API 설계 초안
-
-### 지역
-
-```http
-GET /api/regions
-GET /api/regions/search?keyword=마포구
-```
-
-### 선거 종류
-
-```http
-GET /api/regions/{regionId}/elections
-```
-
-### 후보자
-
-```http
-GET /api/elections/{electionId}/constituencies/{constituencyId}/candidates
-GET /api/candidates/{candidateId}
-```
-
-### 후보자 비교
-
-```http
-GET /api/candidates/compare?ids=1,2,3
-```
-
-### 공약
-
-```http
-GET /api/candidates/{candidateId}/pledges
-```
-
 ## 구현 우선순위
 
 1. 공식 API와 데이터 구조 확인
 2. 샘플 지역 1곳 기준 데이터 수집 파이프라인 구현
-3. 원본 데이터 저장 및 정규화 테이블 설계
-4. 후보자 목록 API 구현
-5. 후보자 상세 API 구현
-6. 지역 선택 및 선거 종류 선택 UI 구현
-7. 후보자 목록, 상세, 비교 UI 구현
-8. 출처와 수집 시각 표시
-9. 샘플 지역 확대
-10. 캐시와 검색 고도화 검토
-
-## 개발 환경 목표
-
-초기 개발 환경은 다음 구성을 목표로 합니다.
-
-```text
-before-you-vote/
-  apps/
-    web/        # Next.js frontend
-    api/        # Spring Boot backend
-  infra/
-    docker-compose.yml
-  docs/
-    data-sources.md
-    api-design.md
-```
+3. 앱 표시용 JSON 데이터셋 생성
+4. 지역 선택 및 선거 종류 선택 UI 구현
+5. 후보자 목록, 상세, 비교 UI 구현
+6. 출처와 수집 시각 표시
+7. 샘플 지역 확대
+8. 검색 고도화 검토
 
 ## 주의할 점
 
 - 공식 데이터의 필드명과 응답 구조가 바뀔 수 있으므로 수집 계층과 서비스 계층을 분리합니다.
 - 후보자 정보는 민감할 수 있으므로 원문 출처, 수집 시각, 원본 데이터를 함께 보관합니다.
 - 비교 UI는 정보의 배치를 동일하게 유지하고, 강조 색상이나 문구로 특정 후보가 유리해 보이지 않도록 합니다.
-- MVP에서는 Redis와 OpenSearch를 필수 구성으로 두지 않고, PostgreSQL만으로 먼저 동작하는 구조를 권장합니다.
+- MVP에서는 별도 데이터베이스, Redis, OpenSearch를 필수 구성으로 두지 않고 JSON 데이터셋만으로 먼저 동작하는 구조를 권장합니다.
 - 전국 단위 전체 구현 전에 샘플 지역으로 데이터 흐름을 검증합니다.

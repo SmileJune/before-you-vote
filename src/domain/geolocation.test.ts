@@ -18,6 +18,7 @@ describe("geolocation mapping", () => {
     expect(result).toEqual({
       status: "mapped",
       regionSlug: "seoul-mapo-seogyo",
+      areaId: "seoul-mapo-seogyo-서교동",
       displayName: "서울특별시 마포구 서교동"
     });
   });

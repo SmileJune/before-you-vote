@@ -16,7 +16,6 @@
     "collect:pledges": "node scripts/collect-candidate-pledges.mjs",
     "collect:districts": "node scripts/collect-district-mappings.mjs",
     "build:app-data": "node scripts/build-app-dataset-from-nationwide.mjs",
-    "db:import": "node scripts/import-app-dataset-to-postgres.mjs",
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
@@ -25,13 +24,11 @@
   "dependencies": {
     "lucide-react": "0.468.0",
     "next": "^16.2.6",
-    "pg": "^8.21.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
   },
   "devDependencies": {
     "@types/node": "20.14.9",
-    "@types/pg": "^8.20.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "4.3.1",

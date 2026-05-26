@@ -1,0 +1,3 @@
+data/nec/*
+!data/nec/app-election-dataset-20260603.json
+!data/nec/district-mappings-20260603.json

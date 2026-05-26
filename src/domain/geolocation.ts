@@ -6,6 +6,7 @@ type Coordinates = {
 type MappedRegion = {
   status: "mapped";
   regionSlug: string;
+  areaId?: string;
   displayName: string;
 };
 
@@ -15,6 +16,7 @@ type UnsupportedRegion = {
 
 type RegionMapping = {
   regionSlug: string;
+  areaId?: string;
   displayName: string;
   bounds: {
     minLatitude: number;
@@ -37,6 +39,7 @@ const supportedRegionMappings: RegionMapping[] = [
   },
   {
     regionSlug: "seoul-mapo-seogyo",
+    areaId: "seoul-mapo-seogyo-서교동",
     displayName: "서울특별시 마포구 서교동",
     bounds: {
       minLatitude: 37.548,
@@ -57,6 +60,7 @@ export function mapCoordinatesToRegion(coordinates: Coordinates): MappedRegion |
   return {
     status: "mapped",
     regionSlug: matched.regionSlug,
+    areaId: matched.areaId,
     displayName: matched.displayName
   };
 }

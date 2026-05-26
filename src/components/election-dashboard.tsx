@@ -5,7 +5,6 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 import {
   buildCandidateComparison,
-  getCandidateQuickFacts,
   getElectionDetail,
   getRegionBySlug,
   getRegionElections
@@ -15,33 +14,51 @@ import {
   getAdministrativeAreaOption,
   getAdministrativeAreaOptions
 } from "@/domain/district-mapping";
-import type { Dataset } from "@/domain/types";
+import { resolveReverseGeocodedRegion, type ReverseGeocodedRegion } from "@/domain/reverse-geocode";
+import type { Candidate, CandidateDocument, Dataset } from "@/domain/types";
 import { LocationAssist } from "@/components/location-assist";
+import { getPartyColor } from "@/domain/party-colors";
 
 const selectedRegionSlug = "seoul-mapo-seogyo";
+const dashboardSelectionStorageKey = "before-you-vote:dashboard-selection";
+const dashboardSelectionCookieName = "before-you-vote-dashboard-selection";
+const dashboardSelectionCookieMaxAgeSeconds = 60 * 60 * 24 * 180;
+
+type DashboardSelection = {
+  regionSlug: string;
+  areaId: string;
+  electionId: string;
+};
 
 type ElectionDashboardProps = {
   dataset: Dataset;
+  initialSelection?: Partial<DashboardSelection> | null;
 };
 
-export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
-  const [selectedRegion, setSelectedRegion] = useState(selectedRegionSlug);
-  const [selectedAreaId, setSelectedAreaId] = useState("");
-  const [selectedComparisonIds, setSelectedComparisonIds] = useState<string[]>([]);
+export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboardProps) {
+  const normalizedInitialSelection = useMemo(
+    () => normalizeDashboardSelection(dataset, initialSelection ?? {}),
+    [dataset, initialSelection]
+  );
+  const [selection, setSelection] = useState<DashboardSelection>(() => normalizedInitialSelection);
+  const selectedRegion = selection.regionSlug;
+  const selectedAreaId = selection.areaId;
   const region = getRegionBySlug(dataset, selectedRegion);
   const regionElections = getRegionElections(dataset, region.id);
   const areaOptions = getAdministrativeAreaOptions(region.slug);
   const selectedArea = getAdministrativeAreaOption(region.slug, selectedAreaId);
   const elections = areaOptions.length > 0 ? filterElectionsByAdministrativeArea(regionElections, selectedArea) : regionElections;
-  const [selectedElectionId, setSelectedElectionId] = useState(elections[0]?.id ?? "");
+  const selectedElectionId = selection.electionId;
   const activeElectionId = elections.some((item) => item.id === selectedElectionId) ? selectedElectionId : elections[0]?.id ?? "";
   const election = getElectionDetail(dataset, activeElectionId);
-  const comparisonCandidates = useMemo(
-    () => election.candidates.filter((candidate) => selectedComparisonIds.includes(candidate.id)),
-    [election.candidates, selectedComparisonIds]
+  const comparison = useMemo(() => buildCandidateComparison(election.candidates), [election.candidates]);
+  const comparisonGridStyle = useMemo(
+    () => ({
+      gridTemplateColumns: `88px repeat(${comparison.candidates.length}, minmax(120px, 1fr))`,
+      minWidth: `max(100%, ${88 + comparison.candidates.length * 120}px)`
+    }),
+    [comparison.candidates.length]
   );
-  const comparison = useMemo(() => buildCandidateComparison(comparisonCandidates), [comparisonCandidates]);
-  const selectedComparisonIdSet = useMemo(() => new Set(selectedComparisonIds), [selectedComparisonIds]);
   const regionsBySido = useMemo(() => {
     const grouped = new Map<string, Dataset["regions"]>();
 
@@ -52,48 +69,63 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
     return [...grouped.entries()];
   }, [dataset.regions]);
 
-  function handleRegionMapped(regionSlug: string) {
-    handleRegionSelected(regionSlug);
+  function handleRegionMapped(mapping: LocationMapping) {
+    if (mapping.type === "reverse-geocoded") {
+      const resolved = resolveReverseGeocodedRegion(dataset, mapping.address);
+
+      if (!resolved) {
+        return false;
+      }
+
+      selectRegion(resolved.regionSlug, resolved.areaId);
+      return true;
+    }
+
+    selectRegion(mapping.regionSlug, mapping.areaId ?? "");
+    return true;
   }
 
   function handleRegionSelected(regionSlug: string) {
+    selectRegion(regionSlug);
+  }
+
+  function selectRegion(regionSlug: string, areaId = "") {
     const nextRegion = getRegionBySlug(dataset, regionSlug);
     const nextRegionElections = getRegionElections(dataset, nextRegion.id);
     const nextAreaOptions = getAdministrativeAreaOptions(nextRegion.slug);
-    const nextElections = nextAreaOptions.length > 0 ? filterElectionsByAdministrativeArea(nextRegionElections, null) : nextRegionElections;
+    const nextArea = getAdministrativeAreaOption(nextRegion.slug, areaId);
+    const nextElections =
+      nextAreaOptions.length > 0 ? filterElectionsByAdministrativeArea(nextRegionElections, nextArea) : nextRegionElections;
 
-    setSelectedRegion(regionSlug);
-    setSelectedAreaId("");
-    setSelectedElectionId(nextElections[0]?.id ?? "");
-    setSelectedComparisonIds([]);
+    updateSelection({
+      regionSlug,
+      areaId: nextArea ? areaId : "",
+      electionId: nextElections[0]?.id ?? ""
+    });
   }
 
   function handleAreaSelected(areaId: string) {
     const nextArea = getAdministrativeAreaOption(region.slug, areaId);
     const nextElections = filterElectionsByAdministrativeArea(regionElections, nextArea);
 
-    setSelectedAreaId(areaId);
-    setSelectedElectionId(nextElections[0]?.id ?? "");
-    setSelectedComparisonIds([]);
+    updateSelection({
+      regionSlug: selectedRegion,
+      areaId,
+      electionId: nextElections[0]?.id ?? ""
+    });
   }
 
   function handleElectionSelected(electionId: string) {
-    setSelectedElectionId(electionId);
-    setSelectedComparisonIds([]);
+    updateSelection({
+      regionSlug: selectedRegion,
+      areaId: selectedAreaId,
+      electionId
+    });
   }
 
-  function handleComparisonToggle(candidateId: string) {
-    setSelectedComparisonIds((current) => {
-      if (current.includes(candidateId)) {
-        return current.filter((id) => id !== candidateId);
-      }
-
-      if (current.length >= 4) {
-        return current;
-      }
-
-      return [...current, candidateId];
-    });
+  function updateSelection(nextSelection: DashboardSelection) {
+    setSelection(nextSelection);
+    persistDashboardSelection(nextSelection);
   }
 
   return (
@@ -213,52 +245,38 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
       </section>
 
       <section className="bg-white px-5 py-5">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold text-civic">{election.ballotName}</p>
-            <h2 className="mt-1 text-xl font-bold">공약 한눈에 보기</h2>
-          </div>
-          <span className="rounded-full bg-paper px-3 py-1 text-xs text-muted">{election.candidates.length}명</span>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-bold">후보 비교</h2>
+          <span className="text-xs text-muted">전체 {comparison.candidates.length}명</span>
         </div>
-        {election.candidates.length > 0 ? (
-          <div className="mt-4 space-y-3">
-            {election.candidates.map((candidate) => (
-              <article key={`pledge-${candidate.id}`} className="rounded-md border border-line bg-white p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-muted">
-                      {candidate.ballotNumber === null ? `순번 ${candidate.sortOrder ?? "-"}` : `기호 ${candidate.ballotNumber}`}
-                    </p>
-                    <h3 className="mt-0.5 text-base font-bold">{candidate.name}</h3>
+        {comparison.candidates.length >= 2 ? (
+          <div className="mt-3 overflow-x-auto rounded-md border border-line bg-white">
+            <div className="grid border-b border-line bg-paper text-xs font-bold" style={comparisonGridStyle}>
+              <div className="sticky left-0 z-20 border-r border-line bg-paper px-3 py-2">항목</div>
+              {comparison.candidates.map((candidate) => (
+                <div key={candidate.id} className="min-w-0 px-3 py-2">
+                  <span className="block truncate">{candidate.name}</span>
+                </div>
+              ))}
+            </div>
+            {comparison.rows.map((row) => (
+              <div
+                key={row.label}
+                className="grid border-b border-line text-xs last:border-b-0"
+                style={comparisonGridStyle}
+              >
+                <div className="sticky left-0 z-10 border-r border-line bg-paper px-3 py-2 font-semibold text-muted">{row.label}</div>
+                {row.values.map((value, index) => (
+                  <div key={`${row.label}-${index}`} className="min-w-0 whitespace-pre-line px-3 py-2 leading-5">
+                    {row.label === "정당" ? <PartyBadge partyName={value} /> : value}
                   </div>
-                  <span className="shrink-0 rounded-full border border-line px-2 py-1 text-xs">{candidate.partyName}</span>
-                </div>
-                {(candidate.pledgeItems ?? []).length > 0 ? (
-                  <ul className="mt-3 space-y-2">
-                    {(candidate.pledgeItems ?? []).slice(0, 5).map((pledge) => (
-                      <li key={`${candidate.id}-${pledge.title}`} className="text-xs leading-5">
-                        <span className="mr-1 rounded border border-line bg-paper px-1.5 py-0.5 text-[10px] font-semibold text-civic">
-                          {pledge.category}
-                        </span>
-                        <span className="font-semibold text-ink">{pledge.title}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-3 rounded-md bg-paper px-3 py-2 text-xs leading-5 text-muted">
-                    5대공약 텍스트자료 미제공. PDF 또는 공보에서 확인하세요.
-                  </p>
-                )}
-                <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs font-semibold">
-                  <DocumentLink label="5대공약" url={candidate.pledgePdf?.url} status={candidate.pledgePdf?.status} />
-                  <DocumentLink label="공보" url={candidate.pamphletPdf?.url} status={candidate.pamphletPdf?.status} />
-                </div>
-              </article>
+                ))}
+              </div>
             ))}
           </div>
         ) : (
-          <div className="mt-4 rounded-md border border-line bg-paper p-4 text-xs leading-5 text-muted">
-            후보 데이터가 수집되면 후보별 주요 공약을 먼저 보여줍니다.
+          <div className="mt-3 rounded-md border border-line bg-white p-4 text-xs leading-5 text-muted">
+            후보가 2명 이상이면 모든 후보를 같은 항목으로 비교합니다.
           </div>
         )}
       </section>
@@ -274,17 +292,8 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
 
         {election.candidates.length > 0 ? (
           <div className="mt-4 space-y-3">
-            {election.candidates.map((candidate) => {
-              const isSelectedForComparison = selectedComparisonIdSet.has(candidate.id);
-              const isComparisonLimitReached = selectedComparisonIds.length >= 4 && !isSelectedForComparison;
-
-              return (
-            <article
-              key={candidate.id}
-              className={`rounded-md border bg-white p-4 ${
-                isSelectedForComparison ? "border-civic ring-2 ring-civic/15" : "border-line"
-              }`}
-            >
+            {election.candidates.map((candidate) => (
+            <article key={candidate.id} className="rounded-md border border-line bg-white p-4">
               <div className="flex gap-3">
                 <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-paper">
                   {candidate.photoUrl ? (
@@ -301,43 +310,23 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
                       </p>
                       <h3 className="mt-0.5 text-lg font-bold">{candidate.name}</h3>
                     </div>
-                    <span className="shrink-0 rounded-full border border-line px-2 py-1 text-xs">{candidate.partyName}</span>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    {getCandidateQuickFacts(candidate).map((fact) => (
-                      <div key={fact.label} className="rounded-md bg-paper px-3 py-2">
-                        <p className="text-[11px] font-semibold text-muted">{fact.label}</p>
-                        <p className="mt-0.5 truncate text-sm font-semibold">{fact.value}</p>
-                      </div>
-                    ))}
+                    <PartyBadge partyName={candidate.partyName} />
                   </div>
                 </div>
               </div>
+
+              <CandidateDetailTable candidate={candidate} electionTitle={election.title} districtName={election.districtName} />
 
               <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs font-semibold">
                 <DocumentLink label="공보" url={candidate.pamphletPdf?.url} status={candidate.pamphletPdf?.status} />
                 <DocumentLink label="5대공약" url={candidate.pledgePdf?.url} status={candidate.pledgePdf?.status} />
                 <DocumentLink label="공개자료" url={candidate.disclosureViewerUrl} status="available" />
               </div>
-              <button
-                type="button"
-                onClick={() => handleComparisonToggle(candidate.id)}
-                disabled={isComparisonLimitReached}
-                className={`mt-3 flex w-full items-center justify-center rounded-md border px-3 py-2 text-xs font-semibold ${
-                  isSelectedForComparison
-                    ? "border-civic bg-civic text-white"
-                    : "border-line bg-paper text-ink disabled:text-muted"
-                }`}
-                aria-pressed={isSelectedForComparison}
-              >
-                {isSelectedForComparison ? "비교 선택됨" : "비교에 추가"}
-              </button>
               <p className="mt-3 text-[11px] leading-4 text-muted">
-                출처: {candidate.source.label} · 수집 {candidate.source.fetchedAt}
+                출처: {candidate.source.label} · 수집 {formatCollectedDate(candidate.source.fetchedAt)}
               </p>
             </article>
-              );
-            })}
+            ))}
           </div>
         ) : (
           <div className="mt-4 rounded-md border border-line bg-paper p-4">
@@ -349,54 +338,157 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
         )}
       </section>
 
-      <section className="px-5 py-5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-bold">후보 비교</h2>
-          <span className="text-xs text-muted">{comparison.candidates.length}명 선택</span>
-        </div>
-        {comparison.candidates.length >= 2 ? (
-          <div className="mt-3 overflow-x-auto rounded-md border border-line bg-white">
-          <div
-            className="grid border-b border-line bg-paper text-xs font-bold"
-            style={{ gridTemplateColumns: `88px repeat(${comparison.candidates.length}, minmax(120px, 1fr))` }}
-          >
-            <div className="px-3 py-2">항목</div>
-            {comparison.candidates.map((candidate) => (
-              <div key={candidate.id} className="min-w-0 px-3 py-2">
-                <span className="block truncate">{candidate.name}</span>
-              </div>
-            ))}
-          </div>
-          {comparison.rows.map((row) => (
-            <div
-              key={row.label}
-              className="grid border-b border-line text-xs last:border-b-0"
-              style={{ gridTemplateColumns: `88px repeat(${comparison.candidates.length}, minmax(120px, 1fr))` }}
-            >
-              <div className="bg-paper px-3 py-2 font-semibold text-muted">{row.label}</div>
-              {row.values.map((value, index) => (
-                <div key={`${row.label}-${index}`} className="min-w-0 whitespace-pre-line px-3 py-2 leading-5">
-                  {value}
-                </div>
-              ))}
-            </div>
-          ))}
-          </div>
-        ) : (
-          <div className="mt-3 rounded-md border border-line bg-white p-4 text-xs leading-5 text-muted">
-            후보 카드에서 2명 이상을 선택하면 같은 항목으로 비교합니다. 기본으로 특정 후보를 올리지 않습니다.
-          </div>
-        )}
-      </section>
-
       <footer className="bg-white px-5 py-5 text-xs leading-5 text-muted">
         <div className="flex gap-2">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <p>위치 기반 조회는 실제 투표구와 다를 수 있습니다. 투표안내문 주소와 다르면 직접 지역을 선택하세요.</p>
+          <div>
+            <p>위치 기반 조회는 실제 투표구와 다를 수 있습니다. 투표안내문 주소와 다르면 직접 지역을 선택하세요.</p>
+            <p className="mt-2">
+              잘못된 정보가 있다면 후보자명, 지역, 항목, 공식 근거 링크를 포함해{" "}
+              <a href="mailto:godhkekf244@gmail.com" className="font-semibold text-civic underline underline-offset-2">
+                godhkekf244@gmail.com
+              </a>
+              으로 알려주세요.
+            </p>
+            <p className="mt-2">
+              <a href="/privacy" className="font-semibold text-civic underline underline-offset-2">
+                개인정보처리방침
+              </a>
+            </p>
+          </div>
         </div>
       </footer>
     </main>
   );
+}
+
+function CandidateDetailTable({
+  candidate,
+  electionTitle,
+  districtName
+}: {
+  candidate: Candidate;
+  electionTitle: string;
+  districtName: string;
+}) {
+  const details = [
+    { label: "정당", value: candidate.partyName, type: "party" },
+    { label: "출마 선거", value: electionTitle },
+    { label: "선거구", value: districtName },
+    { label: "직업", value: candidate.job },
+    { label: "학력", value: candidate.education },
+    { label: "경력", value: candidate.career },
+    { label: "재산", value: candidate.assets?.display ?? "-" },
+    { label: "병역", value: candidate.military ?? "-" },
+    { label: "납세", value: candidate.taxPaid?.display ?? "-" },
+    { label: "최근 5년 체납", value: candidate.taxArrearsLastFiveYears?.display ?? "-" },
+    { label: "현재 체납", value: candidate.taxArrearsCurrent?.display ?? "-" },
+    { label: "전과", value: candidate.criminalRecordCount === null ? "-" : `${candidate.criminalRecordCount}건` },
+    { label: "공보", value: formatDocumentStatus(candidate.pamphletPdf?.status) },
+    { label: "5대공약", value: formatDocumentStatus(candidate.pledgePdf?.status) },
+    { label: "사진", value: candidate.photoUrl ? "제공" : "-" },
+    { label: "공개자료", value: candidate.disclosureViewerUrl ? "제공" : "-" }
+  ];
+
+  return (
+    <dl className="mt-4 overflow-hidden rounded-md border border-line">
+      {details.map((detail) => (
+        <div key={detail.label} className="grid grid-cols-[96px_1fr] border-b border-line text-xs last:border-b-0">
+          <dt className="bg-paper px-3 py-2 font-semibold text-muted">{detail.label}</dt>
+          <dd className="min-w-0 whitespace-pre-line px-3 py-2 leading-5">
+            {detail.type === "party" ? <PartyBadge partyName={detail.value} /> : detail.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function PartyBadge({ partyName }: { partyName: string }) {
+  const color = getPartyColor(partyName);
+
+  return (
+    <span
+      className="inline-flex max-w-[128px] shrink-0 items-center rounded-full border px-2 py-1 text-xs font-semibold leading-none"
+      style={{ backgroundColor: color.background, borderColor: color.border, color: color.text }}
+      title={partyName}
+    >
+      <span className="truncate">{partyName}</span>
+    </span>
+  );
+}
+
+function formatDocumentStatus(status: CandidateDocument["status"] | undefined) {
+  if (status === "available") {
+    return "제공";
+  }
+
+  if (status === "pending") {
+    return "공개 예정";
+  }
+
+  return "-";
+}
+
+function formatCollectedDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value.slice(0, 10);
+  }
+
+  return date.toISOString().slice(0, 10);
+}
+
+function persistDashboardSelection(selection: DashboardSelection) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const serializedSelection = JSON.stringify(selection);
+
+  try {
+    window.localStorage.setItem(dashboardSelectionStorageKey, serializedSelection);
+  } catch {
+    // Storage can be unavailable in private browsing or restricted webviews.
+  }
+
+  document.cookie = [
+    `${dashboardSelectionCookieName}=${encodeURIComponent(serializedSelection)}`,
+    "Path=/",
+    `Max-Age=${dashboardSelectionCookieMaxAgeSeconds}`,
+    "SameSite=Lax"
+  ].join("; ");
+}
+
+type LocationMapping =
+  | {
+      type: "reverse-geocoded";
+      address: ReverseGeocodedRegion;
+    }
+  | {
+      type: "fallback";
+      regionSlug: string;
+      areaId?: string;
+      displayName: string;
+    };
+
+function normalizeDashboardSelection(dataset: Dataset, selection: Partial<DashboardSelection>): DashboardSelection {
+  const regionSlug =
+    selection.regionSlug && dataset.regions.some((item) => item.slug === selection.regionSlug) ? selection.regionSlug : selectedRegionSlug;
+  const region = getRegionBySlug(dataset, regionSlug);
+  const regionElections = getRegionElections(dataset, region.id);
+  const areaOptions = getAdministrativeAreaOptions(region.slug);
+  const areaId = areaOptions.some((option) => option.id === selection.areaId) ? selection.areaId ?? "" : "";
+  const area = getAdministrativeAreaOption(region.slug, areaId);
+  const elections = areaOptions.length > 0 ? filterElectionsByAdministrativeArea(regionElections, area) : regionElections;
+  const electionId = elections.some((item) => item.id === selection.electionId) ? selection.electionId ?? "" : elections[0]?.id ?? "";
+
+  return {
+    regionSlug,
+    areaId,
+    electionId
+  };
 }
 
 function DocumentLink({
@@ -410,7 +502,12 @@ function DocumentLink({
 }) {
   if (status === "available" && url) {
     return (
-      <a href={url} className="flex items-center justify-center gap-1 rounded-md bg-civic px-2 py-2 text-white">
+      <a
+        href={url}
+        className="flex items-center justify-center gap-1 rounded-md bg-civic px-2 py-2 text-white"
+        target="_blank"
+        rel="noreferrer"
+      >
         <FileText size={14} />
         {label}
       </a>
