@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">투표전5분 앱 아이콘</title>
+  <desc id="desc">청록색 배경 위에 투표지와 체크 표시가 있는 정사각형 아이콘</desc>
+  <rect width="1024" height="1024" rx="220" fill="#1f6f78"/>
+  <path d="M287 196h450c36 0 65 29 65 65v602c0 36-29 65-65 65H287c-36 0-65-29-65-65V261c0-36 29-65 65-65z" fill="#ffffff"/>
+  <path d="M334 296h356" stroke="#d9e1ec" stroke-width="34" stroke-linecap="round"/>
+  <path d="M334 400h206" stroke="#d9e1ec" stroke-width="34" stroke-linecap="round"/>
+  <path d="M356 583l104 104 216-255" fill="none" stroke="#1f6f78" stroke-width="72" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M334 788h308" stroke="#1f6f78" stroke-width="50" stroke-linecap="round"/>
+</svg>
