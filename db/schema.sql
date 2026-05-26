@@ -76,3 +76,18 @@ CREATE TABLE IF NOT EXISTS candidate_documents (
   status TEXT NOT NULL CHECK (status IN ('available', 'pending', 'missing')),
   PRIMARY KEY (candidate_id, document_type)
 );
+
+CREATE TABLE IF NOT EXISTS candidate_pledges (
+  id BIGSERIAL PRIMARY KEY,
+  candidate_id TEXT NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+  pledge_order INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL,
+  content TEXT NOT NULL,
+  source_url TEXT NOT NULL,
+  fetched_at TIMESTAMPTZ NOT NULL,
+  UNIQUE (candidate_id, pledge_order)
+);
+
+CREATE INDEX IF NOT EXISTS candidate_pledges_candidate_id_idx ON candidate_pledges(candidate_id);
+CREATE INDEX IF NOT EXISTS candidate_pledges_category_idx ON candidate_pledges(category);

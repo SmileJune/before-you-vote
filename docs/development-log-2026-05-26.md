@@ -543,6 +543,53 @@ Pamphlets: 5473, pledges: 617, failures: 0.
 - 후보자 7,829명 중 정책공약마당에서 문서 메타데이터가 확인된 후보자는 6,271명이다.
 - 모든 후보가 5대공약 PDF를 제출한 것은 아니며, 일부는 원문 PDF 대신 별도 텍스트자료 식별자만 내려온다.
 
+## 2026-05-26 추가 작업: 5대공약 텍스트 원문 수집 및 표시
+
+정책공약마당의 `showPromise(ocrCnvrSeqNo)` 팝업이 `UELPromisePopup.do`와 `UELPromisePopupView.do`를 통해 5대공약 텍스트 원문을 제공하는 것을 확인했다. `fileinfo`의 5대공약 텍스트자료 식별자를 기준으로 후보별 공약 제목과 원문을 수집하고, 키워드 기반 분야 분류를 추가했다.
+
+추가 및 변경 파일:
+
+| 파일 | 내용 |
+| --- | --- |
+| `scripts/collect-candidate-pledges.mjs` | 5대공약 텍스트 원문 수집 및 분야 분류 |
+| `data/nec/candidate-pledges-20260603.json` | 후보자별 공약 제목/분야/원문 |
+| `scripts/build-app-dataset-from-nationwide.mjs` | 앱 후보 데이터에 `pledgeItems` 병합 |
+| `src/domain/types.ts` | 후보 공약 항목 타입 추가 |
+| `src/components/election-dashboard.tsx` | 후보 카드에 주요 공약 3개 표시 |
+| `db/schema.sql` | `candidate_pledges` 테이블 추가 |
+| `scripts/import-app-dataset-to-postgres.mjs` | 공약 원문 DB 적재 |
+
+수집 명령:
+
+```bash
+npm run collect:pledges
+npm run build:app-data
+DATABASE_URL=postgresql://before_you_vote:before_you_vote@127.0.0.1:5433/before_you_vote npm run db:import
+```
+
+수집 결과:
+
+```text
+Collected pledge text for 617/617 candidates.
+Items: 3085, failures: 0.
+```
+
+앱/DB 반영 결과:
+
+| 항목 | 개수 |
+| --- | ---: |
+| 5대공약 텍스트 원문 보유 후보 | 617 |
+| 5대공약 원문 항목 | 3,085 |
+| 앱 후보 표시 항목 중 공약 표시 후보 | 2,691 |
+| 앱 후보 표시 항목 중 공약 항목 | 13,455 |
+| DB `candidate_pledges` rows | 13,455 |
+
+주의사항:
+
+- 모든 후보가 5대공약 텍스트자료를 제출한 것은 아니다.
+- 분야 분류는 원문 키워드 기반의 참고용이다. 원문 제목과 내용을 함께 저장해 분류 결과만 단독으로 판단 근거가 되지 않도록 했다.
+- 후보 카드에는 모바일 가독성을 위해 주요 공약 3개만 먼저 표시하고, PDF/공개자료 링크는 계속 제공한다.
+
 ## 2026-05-26 추가 작업: PostgreSQL 적재 경로 추가
 
 정적 JSON만 읽던 구조에서 운영 DB로 넘어갈 수 있도록 PostgreSQL 스키마, import 스크립트, 서버 데이터 로더를 추가했다. 현재 앱은 `DATABASE_URL`이 있으면 PostgreSQL을 먼저 조회하고, 없거나 조회 실패 시 기존 JSON 데이터셋으로 fallback한다.
@@ -551,7 +598,7 @@ Pamphlets: 5473, pledges: 617, failures: 0.
 
 | 파일 | 내용 |
 | --- | --- |
-| `db/schema.sql` | 지역, 선거, 후보, 상세정보, 공보/공약 문서, 수집 실행 이력 테이블 |
+| `db/schema.sql` | 지역, 선거, 후보, 상세정보, 공보/공약 문서, 공약 원문, 수집 실행 이력 테이블 |
 | `scripts/import-app-dataset-to-postgres.mjs` | `data/nec/app-election-dataset-20260603.json`을 PostgreSQL에 적재 |
 | `src/server/election-data.ts` | `DATABASE_URL` 기반 DB 조회 및 JSON fallback |
 | `src/domain/db-dataset.ts` | PostgreSQL row를 앱 `Dataset` 타입으로 변환 |

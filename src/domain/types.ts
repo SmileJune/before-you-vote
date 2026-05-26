@@ -43,6 +43,7 @@ export type Candidate = {
   photoUrl: string | null;
   pamphletPdf: CandidateDocument | null;
   pledgePdf: CandidateDocument | null;
+  pledgeItems: CandidatePledge[];
   disclosureViewerUrl: string | null;
   source: OfficialSource;
 };
@@ -56,6 +57,14 @@ export type CandidateDocument = {
   label: string;
   url: string;
   status: "available" | "pending" | "missing";
+};
+
+export type CandidatePledge = {
+  title: string;
+  category: string;
+  content: string;
+  sourceUrl: string;
+  fetchedAt: string;
 };
 
 export type OfficialSource = {

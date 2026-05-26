@@ -57,7 +57,16 @@ describe("db dataset mapper", () => {
           disclosure_viewer_url: "https://info.nec.go.kr/electioninfo/candidate_detail_info.xhtml",
           source_label: "중앙선거관리위원회",
           source_url: "https://www.nec.go.kr",
-          source_fetched_at: new Date("2026-05-26T00:00:00.000Z")
+          source_fetched_at: new Date("2026-05-26T00:00:00.000Z"),
+          pledge_items: [
+            {
+              title: "30분 통근도시",
+              category: "교통",
+              content: "철도망과 버스 노선을 개선합니다.",
+              sourceUrl: "https://policy.nec.go.kr/plc/commiment/UELPromisePopup.do",
+              fetchedAt: "2026-05-26T00:00:00.000Z"
+            }
+          ]
         }
       ]
     });
@@ -77,6 +86,12 @@ describe("db dataset mapper", () => {
         label: "5대공약",
         status: "available"
       },
+      pledgeItems: [
+        {
+          title: "30분 통근도시",
+          category: "교통"
+        }
+      ],
       source: {
         fetchedAt: "2026-05-26T00:00:00.000Z"
       }

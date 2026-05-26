@@ -212,11 +212,62 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
         </div>
       </section>
 
+      <section className="bg-white px-5 py-5">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold text-civic">{election.ballotName}</p>
+            <h2 className="mt-1 text-xl font-bold">공약 한눈에 보기</h2>
+          </div>
+          <span className="rounded-full bg-paper px-3 py-1 text-xs text-muted">{election.candidates.length}명</span>
+        </div>
+        {election.candidates.length > 0 ? (
+          <div className="mt-4 space-y-3">
+            {election.candidates.map((candidate) => (
+              <article key={`pledge-${candidate.id}`} className="rounded-md border border-line bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-muted">
+                      {candidate.ballotNumber === null ? `순번 ${candidate.sortOrder ?? "-"}` : `기호 ${candidate.ballotNumber}`}
+                    </p>
+                    <h3 className="mt-0.5 text-base font-bold">{candidate.name}</h3>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-line px-2 py-1 text-xs">{candidate.partyName}</span>
+                </div>
+                {(candidate.pledgeItems ?? []).length > 0 ? (
+                  <ul className="mt-3 space-y-2">
+                    {(candidate.pledgeItems ?? []).slice(0, 5).map((pledge) => (
+                      <li key={`${candidate.id}-${pledge.title}`} className="text-xs leading-5">
+                        <span className="mr-1 rounded border border-line bg-paper px-1.5 py-0.5 text-[10px] font-semibold text-civic">
+                          {pledge.category}
+                        </span>
+                        <span className="font-semibold text-ink">{pledge.title}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-3 rounded-md bg-paper px-3 py-2 text-xs leading-5 text-muted">
+                    5대공약 텍스트자료 미제공. PDF 또는 공보에서 확인하세요.
+                  </p>
+                )}
+                <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs font-semibold">
+                  <DocumentLink label="5대공약" url={candidate.pledgePdf?.url} status={candidate.pledgePdf?.status} />
+                  <DocumentLink label="공보" url={candidate.pamphletPdf?.url} status={candidate.pamphletPdf?.status} />
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-md border border-line bg-paper p-4 text-xs leading-5 text-muted">
+            후보 데이터가 수집되면 후보별 주요 공약을 먼저 보여줍니다.
+          </div>
+        )}
+      </section>
+
       <section id={election.id} className="bg-white px-5 py-5">
         <div className="flex items-end justify-between gap-3">
           <div>
             <p className="text-xs font-semibold text-civic">{election.ballotName}</p>
-            <h2 className="mt-1 text-xl font-bold">{election.title} 후보</h2>
+            <h2 className="mt-1 text-xl font-bold">후보별 상세</h2>
           </div>
           <span className="rounded-full bg-paper px-3 py-1 text-xs text-muted">기호순</span>
         </div>
@@ -324,7 +375,7 @@ export function ElectionDashboard({ dataset }: ElectionDashboardProps) {
             >
               <div className="bg-paper px-3 py-2 font-semibold text-muted">{row.label}</div>
               {row.values.map((value, index) => (
-                <div key={`${row.label}-${index}`} className="min-w-0 px-3 py-2 leading-5">
+                <div key={`${row.label}-${index}`} className="min-w-0 whitespace-pre-line px-3 py-2 leading-5">
                   {value}
                 </div>
               ))}

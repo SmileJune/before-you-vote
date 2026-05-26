@@ -71,11 +71,38 @@ async function loadElectionDatasetFromPostgres(connectionString: string): Promis
           c.disclosure_viewer_url,
           c.source_label,
           c.source_url,
-          c.source_fetched_at
+          c.source_fetched_at,
+          COALESCE(
+            jsonb_agg(
+              jsonb_build_object(
+                'title', cp.title,
+                'category', cp.category,
+                'content', cp.content,
+                'sourceUrl', cp.source_url,
+                'fetchedAt', cp.fetched_at
+              )
+              ORDER BY cp.pledge_order
+            ) FILTER (WHERE cp.id IS NOT NULL),
+            '[]'::jsonb
+          ) AS pledge_items
         FROM candidates c
         LEFT JOIN candidate_details d ON d.candidate_id = c.id
         LEFT JOIN candidate_documents pamphlet ON pamphlet.candidate_id = c.id AND pamphlet.document_type = 'pamphlet'
         LEFT JOIN candidate_documents pledge ON pledge.candidate_id = c.id AND pledge.document_type = 'pledge'
+        LEFT JOIN candidate_pledges cp ON cp.candidate_id = c.id
+        GROUP BY
+          c.id,
+          d.candidate_id,
+          pamphlet.candidate_id,
+          pamphlet.document_type,
+          pamphlet.label,
+          pamphlet.url,
+          pamphlet.status,
+          pledge.candidate_id,
+          pledge.document_type,
+          pledge.label,
+          pledge.url,
+          pledge.status
         ORDER BY c.election_id, c.ballot_number NULLS LAST, c.sort_order NULLS LAST, c.name
       `)
     ]);

@@ -51,6 +51,15 @@ export type DbCandidateRow = {
   source_label: string;
   source_url: string;
   source_fetched_at: Date | string;
+  pledge_items: DbPledgeItem[] | null;
+};
+
+export type DbPledgeItem = {
+  title: string;
+  category: string;
+  content: string;
+  sourceUrl: string;
+  fetchedAt: string;
 };
 
 export type DbDatasetRows = {
@@ -101,6 +110,7 @@ export function mapDbRowsToDataset(rows: DbDatasetRows): Dataset {
       photoUrl: candidate.photo_url,
       pamphletPdf: toDocument(candidate.pamphlet_label, candidate.pamphlet_url, candidate.pamphlet_status),
       pledgePdf: toDocument(candidate.pledge_label, candidate.pledge_url, candidate.pledge_status),
+      pledgeItems: candidate.pledge_items ?? [],
       disclosureViewerUrl: candidate.disclosure_viewer_url,
       source: toSource(candidate.source_label, candidate.source_url, candidate.source_fetched_at)
     }))

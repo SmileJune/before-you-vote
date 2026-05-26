@@ -3,6 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 const nationwide = JSON.parse(await readFile(new URL("../data/nec/nationwide-candidates-20260603.json", import.meta.url), "utf8"));
 const nationwideDetails = await readCandidateDetails();
 const candidateDocuments = await readCandidateDocuments();
+const candidatePledges = await readCandidatePledges();
 const previousDataset = await readPreviousDataset();
 const previousByHuboId = new Map((previousDataset?.candidates ?? []).map((candidate) => [extractHuboId(candidate.id), candidate]));
 
@@ -134,6 +135,7 @@ function getElectionKey(candidate, region) {
 function toAppCandidate(candidate, electionId) {
   const detail = nationwideDetails.details?.[candidate.huboid] ?? null;
   const documents = candidateDocuments.documents?.[candidate.huboid] ?? null;
+  const pledges = candidatePledges.pledges?.[candidate.huboid]?.pledges ?? [];
   const previous = previousByHuboId.get(candidate.huboid);
   const career = [candidate.career1, candidate.career2].filter(Boolean).join("\n") || "자료 없음";
 
@@ -156,6 +158,7 @@ function toAppCandidate(candidate, electionId) {
     photoUrl: detail?.photoUrl ?? previous?.photoUrl ?? null,
     pamphletPdf: normalizeDocument(documents?.pamphletPdf) ?? previous?.pamphletPdf ?? null,
     pledgePdf: normalizeDocument(documents?.pledgePdf) ?? previous?.pledgePdf ?? null,
+    pledgeItems: pledges.length > 0 ? toAppPledges(pledges, candidatePledges.pledges?.[candidate.huboid]?.source) : previous?.pledgeItems ?? [],
     disclosureViewerUrl: detail?.disclosureViewerUrl ?? previous?.disclosureViewerUrl ?? `https://info.nec.go.kr/electioninfo/candidate_detail_info.xhtml?electionId=0020260603&huboId=${candidate.huboid}`,
     source: detail?.source ?? previous?.source ?? {
       label: "중앙선거관리위원회 후보자 OpenAPI",
@@ -300,12 +303,28 @@ async function readCandidateDocuments() {
     .catch(() => ({ documents: {} }));
 }
 
+async function readCandidatePledges() {
+  return readFile(new URL("../data/nec/candidate-pledges-20260603.json", import.meta.url), "utf8")
+    .then(JSON.parse)
+    .catch(() => ({ pledges: {} }));
+}
+
 function normalizeDocument(document) {
   if (!document || document.status === "missing") {
     return null;
   }
 
   return document;
+}
+
+function toAppPledges(pledges, source) {
+  return pledges.map((pledge) => ({
+    title: pledge.title,
+    category: pledge.category,
+    content: pledge.content,
+    sourceUrl: source?.url ?? "https://policy.nec.go.kr/plc/commiment/UELPromisePopup.do",
+    fetchedAt: source?.fetchedAt ?? new Date().toISOString()
+  }));
 }
 
 function extractHuboId(candidateId) {

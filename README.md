@@ -280,12 +280,21 @@ npm run collect:documents
 
 이 명령은 중앙선관위 정책공약마당의 후보자공약 JSON을 선거종류·시도·페이지 단위로 조회해 후보자별 선거공보와 5대공약 PDF 링크를 수집합니다. PDF 원문은 `https://cdn.nec.go.kr/policy_pdf/...` 공개 CDN URL로 연결합니다.
 
+전국 후보자 5대공약 텍스트 원문 수집:
+
+```bash
+npm run collect:pledges
+```
+
+이 명령은 정책공약마당의 5대공약 텍스트자료 식별자를 기준으로 공약 제목과 원문을 수집하고, 키워드 기반으로 분야를 분류합니다. 분야 분류는 참고용이며 원문 제목과 내용은 함께 저장합니다.
+
 생성 파일:
 
 - `data/nec/nationwide-candidates-20260603.json`
 - `data/nec/nationwide-summary-20260603.json`
 - `data/nec/nationwide-candidate-details-20260603.json`
 - `data/nec/candidate-documents-20260603.json`
+- `data/nec/candidate-pledges-20260603.json`
 - `data/nec/app-election-dataset-20260603.json`
 - `src/domain/generated-election-data.ts`
 
@@ -317,6 +326,9 @@ npm run collect:districts
 - 공보/공약 문서 수집 후보: 6,271명
 - 앱 표시 후보 중 선거공보 PDF 링크: 7,547개
 - 앱 표시 후보 중 5대공약 PDF 링크: 2,691개
+- 5대공약 텍스트 원문 수집 후보: 617명
+- 5대공약 원문 항목: 3,085개
+- 앱 표시 후보 중 공약 항목: 13,455개
 - 읍면동-선거구 매핑 지역: 243개
 
 예시로 `경기도 화성시동탄구`는 다음 11개 선거를 표시합니다.
@@ -381,6 +393,7 @@ DATABASE_URL=postgresql://before_you_vote:before_you_vote@localhost:5433/before_
 - `candidates`
 - `candidate_details`
 - `candidate_documents`
+- `candidate_pledges`
 - `collection_runs`
 
 주의:

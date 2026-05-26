@@ -41,6 +41,7 @@ async function truncateTables() {
   await client.query(`
     TRUNCATE TABLE
       candidate_documents,
+      candidate_pledges,
       candidate_details,
       candidates,
       election_regions,
@@ -183,6 +184,7 @@ async function insertCandidates() {
 
     await insertDocument(candidate.id, "pamphlet", candidate.pamphletPdf);
     await insertDocument(candidate.id, "pledge", candidate.pledgePdf);
+    await insertPledges(candidate.id, candidate.pledgeItems ?? []);
   }
 }
 
@@ -198,6 +200,26 @@ async function insertDocument(candidateId, type, document) {
     `,
     [candidateId, type, document.label, document.url, document.status]
   );
+}
+
+async function insertPledges(candidateId, pledgeItems) {
+  for (const [index, pledge] of pledgeItems.entries()) {
+    await client.query(
+      `
+        INSERT INTO candidate_pledges (
+          candidate_id,
+          pledge_order,
+          title,
+          category,
+          content,
+          source_url,
+          fetched_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `,
+      [candidateId, index + 1, pledge.title, pledge.category, pledge.content, pledge.sourceUrl, pledge.fetchedAt]
+    );
+  }
 }
 
 async function readOptionalJson(path) {
