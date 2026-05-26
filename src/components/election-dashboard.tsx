@@ -45,11 +45,14 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
   const selectedAreaId = selection.areaId;
   const region = getRegionBySlug(dataset, selectedRegion);
   const regionElections = getRegionElections(dataset, region.id);
+  const subregionOptions = getSubregionOptions(dataset, region);
   const areaOptions = getAdministrativeAreaOptions(region.slug);
   const selectedArea = getAdministrativeAreaOption(region.slug, selectedAreaId);
+  const isSubregionSelectionMissing = subregionOptions.length > 0;
   const shouldRequireAreaSelection = areaOptions.length > 0;
   const isAreaSelectionMissing = shouldRequireAreaSelection && !selectedArea;
-  const elections = isAreaSelectionMissing
+  const isElectionSelectionBlocked = isSubregionSelectionMissing || isAreaSelectionMissing;
+  const elections = isElectionSelectionBlocked
     ? []
     : shouldRequireAreaSelection
       ? filterElectionsByAdministrativeArea(regionElections, selectedArea)
@@ -98,10 +101,13 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
   function selectRegion(regionSlug: string, areaId = "") {
     const nextRegion = getRegionBySlug(dataset, regionSlug);
     const nextRegionElections = getRegionElections(dataset, nextRegion.id);
+    const nextSubregionOptions = getSubregionOptions(dataset, nextRegion);
     const nextAreaOptions = getAdministrativeAreaOptions(nextRegion.slug);
     const nextArea = getAdministrativeAreaOption(nextRegion.slug, areaId);
+    const isNextSubregionSelectionMissing = nextSubregionOptions.length > 0;
     const isNextAreaSelectionMissing = nextAreaOptions.length > 0 && !nextArea;
-    const nextElections = isNextAreaSelectionMissing
+    const isNextElectionSelectionBlocked = isNextSubregionSelectionMissing || isNextAreaSelectionMissing;
+    const nextElections = isNextElectionSelectionBlocked
       ? []
       : nextAreaOptions.length > 0
         ? filterElectionsByAdministrativeArea(nextRegionElections, nextArea)
@@ -109,8 +115,8 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
 
     updateSelection({
       regionSlug,
-      areaId: nextArea ? areaId : "",
-      electionId: isNextAreaSelectionMissing ? "" : nextElections[0]?.id ?? ""
+      areaId: nextArea && !isNextSubregionSelectionMissing ? areaId : "",
+      electionId: isNextElectionSelectionBlocked ? "" : nextElections[0]?.id ?? ""
     });
   }
 
@@ -163,7 +169,11 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
             <p className="text-xs font-semibold text-muted">현재 선택 지역</p>
             <h2 className="mt-1 text-lg font-bold">{region.displayName}</h2>
             <p className="mt-1 text-xs leading-5 text-muted">{region.notice}</p>
-            {areaOptions.length > 0 ? (
+            {subregionOptions.length > 0 ? (
+              <p className="mt-1 text-xs leading-5 text-muted">
+                이 지역은 구별로 투표지가 달라집니다. 아래 세부 지역을 먼저 선택해 주세요.
+              </p>
+            ) : areaOptions.length > 0 ? (
               <p className="mt-1 text-xs leading-5 text-muted">
                 읍면동에 따라 지방의원 선거구가 갈립니다. 아래 읍면동을 선택하면 실제로 볼 선거만 남깁니다.
               </p>
@@ -191,7 +201,29 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
             ))}
           </select>
         </div>
-        {areaOptions.length > 0 ? (
+        {subregionOptions.length > 0 ? (
+          <div className="mt-4 rounded-md border border-line bg-paper p-3">
+            <label htmlFor="subregion-select" className="text-xs font-semibold text-muted">
+              세부 지역 선택
+            </label>
+            <select
+              id="subregion-select"
+              value=""
+              onChange={(event) => handleRegionSelected(event.target.value)}
+              className="mt-2 w-full rounded-md border border-line bg-white px-3 py-3 text-sm font-semibold text-ink"
+            >
+              <option value="">구를 선택하세요</option>
+              {subregionOptions.map((option) => (
+                <option key={option.id} value={option.slug}>
+                  {option.displayName}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs leading-5 text-muted">
+              같은 시 안에서도 관할 구와 읍면동에 따라 지방의원 선거구가 달라집니다.
+            </p>
+          </div>
+        ) : areaOptions.length > 0 ? (
           <div className="mt-4 rounded-md border border-line bg-paper p-3">
             <label htmlFor="area-select" className="text-xs font-semibold text-muted">
               읍면동 선택
@@ -222,13 +254,24 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
         ) : null}
       </section>
 
-      {isAreaSelectionMissing ? (
+      {isElectionSelectionBlocked ? (
         <section className="px-5 py-5">
           <div className="rounded-md border border-line bg-white p-4">
-            <p className="text-sm font-bold">읍면동을 먼저 선택하세요</p>
-            <p className="mt-2 text-xs leading-5 text-muted">
-              같은 시·군·구 안에서도 시·도의원과 구·시·군의원 선거구가 달라집니다. 실제 투표지에 가까운 목록을 보려면 읍면동 선택이 필요합니다.
-            </p>
+            {isSubregionSelectionMissing ? (
+              <>
+                <p className="text-sm font-bold">세부 지역을 먼저 선택하세요</p>
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  같은 시 안에서도 구와 읍면동에 따라 시·도의원과 구·시·군의원 선거구가 달라집니다. 실제 투표지에 가까운 목록을 보려면 세부 지역 선택이 필요합니다.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-bold">읍면동을 먼저 선택하세요</p>
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  같은 시·군·구 안에서도 시·도의원과 구·시·군의원 선거구가 달라집니다. 실제 투표지에 가까운 목록을 보려면 읍면동 선택이 필요합니다.
+                </p>
+              </>
+            )}
           </div>
         </section>
       ) : (
@@ -498,16 +541,31 @@ type LocationMapping =
       displayName: string;
     };
 
+function getSubregionOptions(dataset: Dataset, region: Dataset["regions"][number]) {
+  return dataset.regions
+    .filter(
+      (item) =>
+        item.sido === region.sido &&
+        item.slug !== region.slug &&
+        item.sigungu.startsWith(region.sigungu) &&
+        item.sigungu.length > region.sigungu.length
+    )
+    .sort((left, right) => left.displayName.localeCompare(right.displayName, "ko"));
+}
+
 function normalizeDashboardSelection(dataset: Dataset, selection: Partial<DashboardSelection>): DashboardSelection {
   const regionSlug =
     selection.regionSlug && dataset.regions.some((item) => item.slug === selection.regionSlug) ? selection.regionSlug : selectedRegionSlug;
   const region = getRegionBySlug(dataset, regionSlug);
   const regionElections = getRegionElections(dataset, region.id);
+  const subregionOptions = getSubregionOptions(dataset, region);
   const areaOptions = getAdministrativeAreaOptions(region.slug);
   const areaId = areaOptions.some((option) => option.id === selection.areaId) ? selection.areaId ?? "" : "";
   const area = getAdministrativeAreaOption(region.slug, areaId);
+  const isSubregionSelectionMissing = subregionOptions.length > 0;
   const isAreaSelectionMissing = areaOptions.length > 0 && !area;
-  const elections = isAreaSelectionMissing
+  const isElectionSelectionBlocked = isSubregionSelectionMissing || isAreaSelectionMissing;
+  const elections = isElectionSelectionBlocked
     ? []
     : areaOptions.length > 0
       ? filterElectionsByAdministrativeArea(regionElections, area)
