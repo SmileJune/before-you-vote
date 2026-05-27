@@ -1,502 +1,249 @@
-# BeforeYouVote — 투표전5분
+# BeforeYouVote - 투표전5분
 
-투표장 가기 전 5분, 내가 투표할 후보와 공약을 빠르게 확인하는 웹 서비스입니다.
+투표 전 내 지역에서 확인해야 할 선거와 후보자 정보를 공식 자료 기준으로 빠르게 확인하는 모바일 웹 서비스입니다.
 
 서비스 주소: https://before-you-vote.vercel.app
 
-이 프로젝트는 2026년 6월 3일 실시 예정인 대한민국 제9회 전국동시지방선거를 대비해, 유권자가 자신의 지역 후보자 정보를 쉽고 빠르게 확인할 수 있도록 돕는 것을 목표로 합니다.
-
-서비스는 특정 후보를 추천하거나 평가하지 않습니다. 중앙선거관리위원회 등 공식 출처에서 제공하는 정보를 보기 좋게 정리하고, 후보자 간 동일한 기준의 비교 화면을 제공하는 데 집중합니다.
-
-> 임시 서비스명: 우리동네후보
-
-## 문제 정의
-
-지방선거는 선거 종류와 후보자가 많고, 유권자가 실제로 확인해야 하는 정보가 지역별로 다릅니다. 시도, 시군구, 읍면동 또는 선거구에 따라 투표해야 하는 선거 종류가 달라지고, 후보자 정보도 여러 화면과 문서에 흩어져 있어 짧은 시간 안에 파악하기 어렵습니다.
-
-BeforeYouVote는 사용자가 자신의 지역을 선택하면 해당 지역에서 확인해야 할 선거 종류와 후보자 정보를 한 번에 확인할 수 있게 합니다.
+이 프로젝트는 2026년 6월 3일 실시 예정인 대한민국 제9회 전국동시지방선거를 대비해 만들었습니다. 특정 후보를 추천하거나 평가하지 않고, 중앙선거관리위원회 등 공식 출처의 정보를 같은 구조로 정리해 보여주는 데 집중합니다.
 
 ## 서비스 원칙
 
-이 서비스는 정치적 의견이나 추천을 제공하지 않습니다.
-
 - 공식 출처 기반 데이터만 사용합니다.
-- 후보자별 동일한 항목과 동일한 UI 구조를 제공합니다.
-- 특정 후보를 추천하거나 점수화하지 않습니다.
-- 후보자 순서는 기호순, 이름순, 정당순 등 객관적 기준만 사용합니다.
-- AI 요약 기능을 추가하더라도 원문을 함께 제공합니다.
-- AI 요약은 참고용임을 명확히 표시합니다.
-- 모든 데이터에는 출처와 수집 시각을 저장합니다.
-- 후보자 정보 변경 가능성을 고려해 원본 데이터도 함께 저장합니다.
+- 특정 후보를 추천, 점수화, 랭킹화하지 않습니다.
+- 후보자 순서는 기호, 정렬순서, 이름 등 객관적 기준만 사용합니다.
+- 후보자 비교표는 모든 후보에게 동일한 항목과 표시 순서를 적용합니다.
+- 출처와 수집일을 UI에 표시합니다.
+- 사용자의 위치 좌표는 지역 추정에만 사용하고 서버에 저장하지 않습니다.
+- 회원가입 없이 이용하며, 선택한 지역과 선거 항목은 사용자 브라우저의 cookie/localStorage에 저장합니다.
 
-## 핵심 사용자 시나리오
+## 현재 구현 범위
 
-### 1. 내 지역 후보 찾기
-
-사용자는 자신의 지역을 선택합니다.
-
-예시:
-
-- 서울특별시 마포구 서교동
-- 경기도 남양주시 다산동
-- 부산광역시 해운대구 우동
-
-서비스는 사용자가 선택한 지역에서 확인해야 할 선거 종류를 보여줍니다.
-
-예시:
-
-- 시도지사
-- 구시군의 장
-- 시도의회의원
-- 구시군의회의원
-- 교육감
-- 비례대표 지방의원
-
-사용자는 선거 종류를 선택하고 해당 선거의 후보자 목록을 확인합니다.
-
-### 2. 후보자 상세 정보 확인
-
-사용자는 후보자 카드를 클릭해 상세 정보를 확인합니다.
-
-후보자 상세 화면에는 다음 정보가 포함됩니다.
-
-- 후보자 이름
-- 정당명
-- 기호
-- 출마 선거 종류
-- 선거구
-- 나이
-- 성별
-- 직업
-- 학력
-- 경력
-- 재산
-- 병역
-- 납세
-- 전과
-- 후보자 등록 상태
-- 공식 출처
-- 데이터 수집 시각
-
-### 3. 후보자 비교
-
-사용자는 동일 선거구의 후보자 2명 이상을 선택해 비교할 수 있습니다.
-
-비교 화면은 평가가 아닌 정보 나열에 집중하며, 표 형태로 제공합니다.
-
-비교 항목 예시:
-
-- 정당
-- 나이
-- 직업
-- 학력
-- 주요 경력
-- 재산
-- 병역
-- 납세
-- 전과
-- 공약 키워드
-
-### 4. 공약 확인
-
-후보자가 공약 정보를 제공한 경우, 사용자는 후보자별 공약을 확인할 수 있습니다.
-
-공약 화면에는 다음 정보가 포함됩니다.
-
-- 공약 제목
-- 공약 원문
-- 공약 분야
-- 공식 출처
-
-공약 요약 기능은 후순위 기능으로 분리합니다. 초기 MVP에서는 공약 원문 제공을 우선합니다.
-
-## MVP 범위
-
-초기 MVP는 과하게 만들지 않고, 유권자가 지역 후보자를 빠르게 확인하는 흐름에 집중합니다.
-
-### 포함
-
-- 지역 선택
-- 선거 종류 선택
-- 후보자 목록 조회
-- 후보자 상세 조회
-- 후보자 비교
-- 공식 출처 표시
-- 데이터 수집 시각 표시
-- 원본 데이터 저장
-
-### 제외 또는 후순위
-
-- 공약 AI 요약
-- 공약 자동 분류
-- 관심 후보 저장
-- 알림 기능
-- 개인화 추천
-- 후보자 점수화
-- 고도화 검색 엔진
-
-## 제품 설계 피드백
-
-현재 아이디어의 방향은 좋습니다. 특히 "추천하지 않고, 공식 정보를 같은 구조로 보여준다"는 원칙이 서비스의 신뢰성을 만드는 핵심입니다. 다만 구현 단계에서는 다음 지점을 초기에 명확히 잡는 것이 좋습니다.
-
-### 1. 추천 서비스가 아니라 확인 서비스로 포지셔닝
-
-정치 서비스는 작은 UI 문구나 정렬 방식만으로도 편향처럼 보일 수 있습니다. 따라서 "좋은 후보 찾기"보다 "내 투표지에 나올 후보 확인"에 가까운 표현을 쓰는 것이 안전합니다.
-
-권장 표현:
-
-- 내 지역 후보 확인
-- 후보자 정보 비교
-- 공식 자료 기반 후보 정보
-- 투표 전 확인할 정보
-
-피해야 할 표현:
-
-- 후보 추천
-- 좋은 후보
-- 유리한 후보
-- 검증된 후보
-- 점수, 랭킹, 등급
-
-### 2. 데이터 출처와 수집 시각을 UI의 일부로 취급
-
-출처와 수집 시각은 부가 정보가 아니라 이 서비스의 신뢰를 지탱하는 핵심 기능입니다. 후보자 상세, 비교, 공약 화면 모두에서 출처와 수집 시각을 노출해야 합니다.
-
-데이터가 변경될 수 있으므로 정규화된 데이터와 함께 원본 응답을 저장하는 구조가 필요합니다.
-
-### 3. 지역 선택 모델을 먼저 검증
-
-지방선거는 행정구역, 선거구, 읍면동, 비례대표 단위가 섞입니다. MVP에서 가장 큰 리스크는 화면 구현보다 "사용자가 선택한 지역에서 어떤 선거를 봐야 하는가"를 정확히 매핑하는 것입니다.
-
-초기에는 전국 전체를 목표로 하기보다, 한두 개 시도를 샘플로 삼아 지역-선거구 매핑과 후보 조회 흐름을 먼저 검증하는 것이 좋습니다.
-
-### 4. 공약은 원문 우선, 요약은 나중
-
-AI 요약은 유용하지만 정치 정보에서는 오해와 누락의 위험이 큽니다. MVP에서는 공약 원문, 출처, 수집 시각을 안정적으로 제공하는 것이 우선입니다.
-
-요약을 추가할 경우에는 다음 조건이 필요합니다.
-
-- 원문을 항상 함께 표시
-- 요약이 참고용임을 명확히 표시
-- 요약 생성 시각 저장
-- 사용한 모델 및 프롬프트 버전 저장
-- 후보자별 동일한 요약 기준 적용
-
-## 주요 화면
-
-### 메인 페이지
-
-- 서비스 목적을 짧게 설명합니다.
-- 지역 선택으로 바로 진입할 수 있게 합니다.
-- 추천이나 평가가 아닌 공식 정보 확인 서비스임을 명확히 보여줍니다.
-
-### 지역 선택 페이지
-
-- 시도, 시군구, 읍면동 또는 선거구를 선택합니다.
-- 선택한 지역 기준으로 확인 가능한 선거 종류를 보여줍니다.
-
-### 후보자 목록 페이지
-
-- 선택한 지역과 선거 종류에 해당하는 후보자 목록을 카드 형태로 보여줍니다.
-- 후보자 이름, 정당, 기호, 선거구, 주요 기본 정보를 표시합니다.
-- 동일 선거구 후보자를 비교 대상으로 선택할 수 있습니다.
-
-### 후보자 상세 페이지
-
-- 후보자의 기본 정보와 등록 정보를 항목별로 보여줍니다.
-- 재산, 병역, 납세, 전과 등 민감한 정보는 공식 자료 기반으로 중립적으로 표시합니다.
-- 출처와 수집 시각을 함께 표시합니다.
-
-### 후보자 비교 페이지
-
-- 동일 선거구의 후보자를 표 형태로 비교합니다.
-- 모든 후보자에게 동일한 항목과 동일한 표시 순서를 적용합니다.
-- 비교 결과에 점수나 평가 문구를 붙이지 않습니다.
+- 지역 직접 선택
+- 광역/시군구/구 단위 하위 지역 선택 요구
+- 읍면동 선택 기반 지방의원 선거구 필터링
+- 브라우저 위치 권한 기반 지역 추정
+  - Naver Maps Reverse Geocoding 우선
+  - Kakao Local API reverse geocoding fallback
+  - 일부 지역 bounding box fallback
+- 확인할 선거 목록 표시
+- 선택한 선거의 후보자 상세 카드 표시
+- 후보자 공보, 5대공약 PDF, 공개자료 링크 표시
+- 카카오톡 인앱브라우저 PDF 다운로드를 위한 프록시 API
+- 후보 비교표
+  - 왼쪽 항목 열 고정
+  - 후보명 헤더 상단 고정
+  - 후보명 헤더와 본문 가로 스크롤 동기화
+- 개인정보처리방침 페이지
+- Open Graph/Twitter 공유 이미지
+- Vercel Analytics
 
 ## 기술 스택
 
-### Frontend
-
-- Next.js
-- React
+- Next.js 16 App Router
+- React 19
 - TypeScript
 - Tailwind CSS
+- Vitest
+- ESLint
+- Vercel
 
-### Local Development
+## 런타임 구조
 
-현재 구현된 첫 번째 MVP 슬라이스는 Next.js 모바일 웹입니다.
+앱은 별도 데이터베이스 없이 빌드/실행 시 JSON 데이터셋을 읽습니다.
 
-요구 런타임:
-
-- Node.js 20.9 이상
-- 권장: `.nvmrc`의 Node.js 22.22.0
-
-선택 환경 변수:
-
-- `DATA_OPEN_API_KEY`: 중앙선거관리위원회 후보자 OpenAPI 수집용
-- `KAKAO_REST_API_KEY`: 현재 위치 좌표를 행정동으로 변환하는 Kakao Local API용
-
-명령:
-
-```bash
-npm install
-npm run collect:data
-npm run collect:nationwide
-npm test
-npm run build
-npm run dev
+```mermaid
+flowchart TD
+    A["중앙선관위 OpenAPI / 선거통계시스템 / 정책공약마당"] --> B["수집 스크립트"]
+    B --> C["data/nec/*.json"]
+    C --> D["앱 데이터셋 빌더"]
+    D --> E["data/nec/app-election-dataset-20260603.json"]
+    E --> F["Next.js App Router"]
+    F --> G["Vercel"]
 ```
 
-로컬 개발 서버:
+주요 런타임 파일:
+
+- `src/app/page.tsx`: cookie에서 초기 선택값을 읽고 대시보드 렌더링
+- `src/components/election-dashboard.tsx`: 지역 선택, 선거 목록, 후보 카드, 비교표 UI
+- `src/components/location-assist.tsx`: 브라우저 위치 권한 요청과 지역 추정
+- `src/app/api/reverse-geocode/route.ts`: 좌표를 행정동 정보로 변환하는 API route
+- `src/domain/reverse-geocode-providers.ts`: Naver/Kakao 역지오코딩 provider와 응답 정규화
+- `src/domain/reverse-geocode.ts`: 역지오코딩 결과를 앱 지역/읍면동 선택값으로 변환
+- `src/domain/geolocation.ts`: provider 실패 시 사용하는 일부 지역 좌표 fallback
+- `src/app/api/document-download/route.ts`: 선관위 PDF 다운로드 프록시
+- `src/app/privacy/page.tsx`: 개인정보처리방침
+- `src/domain/election.ts`: 지역/선거/후보 조회와 비교표 데이터 생성
+- `src/domain/district-mapping.ts`: 읍면동별 선거구 필터링
+- `src/domain/generated-election-data.ts`: 앱 데이터셋 JSON 로더
+- `src/domain/generated-district-mappings.ts`: 읍면동-선거구 매핑 JSON 로더
+
+## 위치 기반 지역 찾기
+
+브라우저에서 좌표 권한을 받으면 `/api/reverse-geocode`가 좌표를 행정동으로 변환합니다.
+
+처리 순서:
+
+1. `NAVER_MAPS_CLIENT_ID`와 `NAVER_MAPS_CLIENT_SECRET`이 있으면 Naver Maps Reverse Geocoding API를 먼저 호출합니다.
+2. Naver 호출이 실패하고 `KAKAO_REST_API_KEY`가 있으면 Kakao Local API를 fallback으로 호출합니다.
+3. 서버 역지오코딩이 매핑되지 않으면 클라이언트의 일부 지역 bounding box fallback을 시도합니다.
+4. 행정동 결과는 앱 데이터셋의 지역/읍면동 옵션으로 해석됩니다.
+
+운영 중인 Naver endpoint:
 
 ```text
-http://localhost:3000
+https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc
 ```
 
-### Data Collection
+## 데이터 파일
 
-현재 앱은 선관위 공식 출처로 수집한 정적 데이터셋을 사용합니다. 대용량 데이터 본문은 `data/nec/app-election-dataset-20260603.json`에 저장하고, `src/domain/generated-election-data.ts`는 빌드 성능을 위해 JSON을 읽는 얇은 로더로 유지합니다.
+현재 앱은 `data/nec` 아래의 JSON 파일을 기준으로 동작합니다.
 
-초기 샘플 수집 스크립트:
+- `app-election-dataset-20260603.json`: 앱에서 직접 읽는 지역/선거/후보 통합 데이터셋
+- `district-mappings-20260603.json`: 읍면동별 시도의원/구시군의원 선거구 매핑
+- `nationwide-candidates-20260603.json`: 전국 후보자 기본 정보
+- `nationwide-candidate-details-20260603.json`: 후보자 상세 공개 정보
+- `candidate-documents-20260603.json`: 선거공보/5대공약 PDF 메타데이터
+- `candidate-pledges-20260603.json`: 5대공약 텍스트 원문
+- `nationwide-summary-20260603.json`: 전국 수집 요약
+- `db-export-20260603.json`: 과거 DB 스냅샷 보존용 데이터. 앱 실행에는 사용하지 않습니다.
 
-```bash
-npm run collect:data
-```
+## 현재 데이터 범위
 
-이 스크립트는 서울 마포구와 경기 화성시동탄구의 제한된 샘플 검증용입니다. 현재 화면 데이터는 아래 전국 수집 및 앱 데이터셋 생성 결과를 기준으로 합니다.
-
-전국 후보자 기본정보 수집:
-
-```bash
-npm run collect:nationwide
-```
-
-전국 후보자 상세 공개정보 수집:
-
-```bash
-npm run collect:details
-```
-
-이 명령은 선거통계시스템 후보자 상세 페이지를 후보자별로 호출해 재산, 병역, 납세, 최근 5년 체납, 현 체납, 전과, 사진 URL을 수집합니다. 중간 저장을 지원하므로 중단 후 다시 실행하면 이미 수집한 후보자는 건너뜁니다.
-
-전국 후보자 공보/공약 PDF 메타데이터 수집:
-
-```bash
-npm run collect:documents
-```
-
-이 명령은 중앙선관위 정책공약마당의 후보자공약 JSON을 선거종류·시도·페이지 단위로 조회해 후보자별 선거공보와 5대공약 PDF 링크를 수집합니다. PDF 원문은 `https://cdn.nec.go.kr/policy_pdf/...` 공개 CDN URL로 연결합니다.
-
-전국 후보자 5대공약 텍스트 원문 수집:
-
-```bash
-npm run collect:pledges
-```
-
-이 명령은 정책공약마당의 5대공약 텍스트자료 식별자를 기준으로 공약 제목과 원문을 수집하고, 키워드 기반으로 분야를 분류합니다. 분야 분류는 참고용이며 원문 제목과 내용은 함께 저장합니다.
-
-생성 파일:
-
-- `data/nec/nationwide-candidates-20260603.json`
-- `data/nec/nationwide-summary-20260603.json`
-- `data/nec/nationwide-candidate-details-20260603.json`
-- `data/nec/candidate-documents-20260603.json`
-- `data/nec/candidate-pledges-20260603.json`
-- `data/nec/app-election-dataset-20260603.json`
-- `src/domain/generated-election-data.ts`
-
-앱 데이터셋 생성:
-
-```bash
-npm run build:app-data
-```
-
-읍면동-선거구 매핑 수집:
-
-```bash
-npm run collect:districts
-```
-
-이 명령은 시·도선거관리위원회 홈페이지의 구·시·군위원회 `선거관리현황` 페이지를 순회해 읍면동별 시·도의원/구·시·군의원 선거구를 수집합니다.
-
-생성 파일:
-
-- `data/nec/district-mappings-20260603.json`
-- `src/domain/generated-district-mappings.ts`
-
-현재 앱 데이터셋 범위:
+2026년 5월 26일 기준 생성된 JSON 데이터셋의 범위입니다.
 
 - 직접 선택 가능 지역: 312개
 - 지역별 선거 항목: 3,209개
-- 후보자 표시 항목: 17,904개
-- 상세 공개정보 수집 후보: 7,829명
-- 공보/공약 문서 수집 후보: 6,271명
+- 앱 표시 후보 항목: 17,904개
+- 후보자 상세 공개정보 수집 후보: 7,829명
+- 정책공약마당 문서 매칭 후보: 6,271명
 - 앱 표시 후보 중 선거공보 PDF 링크: 7,547개
 - 앱 표시 후보 중 5대공약 PDF 링크: 2,691개
 - 5대공약 텍스트 원문 수집 후보: 617명
 - 5대공약 원문 항목: 3,085개
 - 앱 표시 후보 중 공약 항목: 13,455개
 - 읍면동-선거구 매핑 지역: 243개
+- 읍면동-선거구 매핑 실패: 0개
 
-예시로 `경기도 화성시동탄구`는 다음 11개 선거를 표시합니다.
-
-- 경기도지사
-- 경기도교육감
-- 화성시장
-- 화성시제3선거구 시·도의원
-- 화성시제4선거구 시·도의원
-- 화성시제5선거구 시·도의원
-- 화성시다선거구 구·시·군의원
-- 화성시라선거구 구·시·군의원
-- 화성시마선거구 구·시·군의원
-- 경기도 광역의원 비례대표
-- 화성시 기초의원 비례대표
-
-전국 수집 범위:
-
-- 17개 시도
-- 국회의원선거
-- 시·도지사선거
-- 구·시·군의 장선거
-- 시·도의회의원선거
-- 구·시·군의회의원선거
-- 광역의원비례대표선거
-- 기초의원비례대표선거
-- 교육감선거
-
-현재 후보자 상세 공개정보는 선거통계시스템 후보자 상세 페이지에서 수집합니다. 7,829명 중 7,805명은 재산, 병역, 납세, 체납, 전과, 사진 값이 확인되었고, 나머지는 상세 페이지에 해당 표가 없는 후보로 `자료 없음`을 유지합니다.
-
-수집 출처:
+## 수집 출처
 
 - 중앙선거관리위원회 후보자 OpenAPI
 - 중앙선거관리위원회 선거통계시스템 후보자 상세 페이지
 - 중앙선거관리위원회 정책공약마당 후보자공약 JSON
+- 시·도선거관리위원회 구·시·군위원회 선거관리현황 페이지
 
-### JSON Dataset Runtime
+## 환경 변수
 
-앱은 배포 시 생성된 JSON 데이터셋만 읽습니다. 별도 데이터베이스 서버 없이 `data/nec/app-election-dataset-20260603.json`을 서버 렌더링 단계에서 로드합니다.
+로컬 개발은 `.env` 파일을 사용합니다. 운영 배포는 Vercel Project Settings의 Environment Variables에 같은 이름으로 등록합니다.
 
-전체 DB 스냅샷에서 옮긴 보존용 데이터는 `data/nec/db-export-20260603.json`에 남겨 두었습니다. 앱 실행에는 사용하지 않습니다.
-
-주의:
-
-- 위치 기반 지역 찾기는 현재 지원 지역 bounding box 기반입니다.
-- 현재 지역 목록은 후보자 OpenAPI의 `sdName`, `wiwName`, `sggName` 기준으로 구성합니다.
-- 읍면동-선거구 매핑이 수집된 지역은 읍면동 선택 후 지방의원 지역구 선거만 표시합니다.
-- 매핑이 아직 없는 지역은 선거구역 데이터 추가 수집 대상입니다.
-- 실제 투표 지역은 주민등록상 주소와 투표안내문 기준으로 확인해야 합니다.
-
-Next.js는 SEO, 공유 가능한 후보자 상세 페이지, 정적/서버 렌더링 조합을 고려해 사용합니다.
-
-## 전체 아키텍처
-
-```mermaid
-flowchart TD
-    A[중앙선관위 Open API] --> B[Data Collector / Scheduler]
-    B --> C[Raw JSON Files]
-    C --> D[App Dataset Builder]
-    D --> E[data/nec/app-election-dataset-20260603.json]
-    E --> F[Next.js Web]
+```bash
+DATA_OPEN_API_KEY=
+KAKAO_REST_API_KEY=
+NAVER_MAPS_CLIENT_ID=
+NAVER_MAPS_CLIENT_SECRET=
 ```
 
-## 데이터 설계
+용도:
 
-### Election
+- `NAVER_MAPS_CLIENT_ID`: Naver Maps Reverse Geocoding API Client ID
+- `NAVER_MAPS_CLIENT_SECRET`: Naver Maps Reverse Geocoding API Client Secret
+- `KAKAO_REST_API_KEY`: Naver 실패 시 fallback으로 사용할 Kakao Local API REST API key
+- `DATA_OPEN_API_KEY`: 중앙선관위 데이터 수집 스크립트 실행에 필요. 운영 앱 런타임에는 필요하지 않습니다.
 
-선거 자체를 나타냅니다.
+`NAVER_MAPS_CLIENT_ID`와 `NAVER_MAPS_CLIENT_SECRET`은 서버 전용 값입니다. `NEXT_PUBLIC_` prefix를 붙이지 않습니다.
 
-- id
-- name
-- election_date
-- election_type
-- source
+## 데이터 수집 명령
 
-### Region
+수집 및 생성 스크립트:
 
-행정구역 또는 사용자 선택 지역을 나타냅니다.
+```bash
+npm run collect:data
+npm run collect:nationwide
+npm run collect:details
+npm run collect:documents
+npm run collect:pledges
+npm run collect:districts
+npm run build:app-data
+```
 
-- id
-- sido
-- sigungu
-- eupmyeondong
-- legal_dong_code
-- administrative_dong_code
+스크립트 역할:
 
-### Constituency
+- `collect:data`: 서울 마포구와 경기 화성시동탄구 샘플 검증용 수집
+- `collect:nationwide`: 전국 후보자 기본 정보 수집
+- `collect:details`: 선거통계시스템 후보자 상세 공개 정보 수집
+- `collect:documents`: 정책공약마당 선거공보/5대공약 PDF 메타데이터 수집
+- `collect:pledges`: 5대공약 텍스트 원문 수집
+- `collect:districts`: 읍면동-선거구 매핑 수집
+- `build:app-data`: 수집 데이터를 앱 표시용 JSON 데이터셋으로 변환
 
-선거구를 나타냅니다.
+## 로컬 개발
 
-- id
-- election_id
-- name
-- type
-- sido
-- sigungu
-- source_code
+요구 런타임:
 
-### Candidate
+- Node.js 20.9 이상
+- npm 10 이상
 
-후보자 정규화 정보를 나타냅니다.
+설치:
 
-- id
-- election_id
-- constituency_id
-- name
-- party_name
-- candidate_number
-- age
-- gender
-- job
-- education
-- career
-- assets
-- military_service
-- tax_payment
-- criminal_record
-- registration_status
-- source_url
-- collected_at
-- raw_data_id
+```bash
+npm install
+```
 
-### Pledge
+개발 서버:
 
-후보자 공약 정보를 나타냅니다.
+```bash
+npm run dev
+```
 
-- id
-- candidate_id
-- title
-- category
-- content
-- source_url
-- collected_at
-- raw_data_id
+로컬 주소:
 
-### RawData
+```text
+http://localhost:3000
+```
 
-공식 출처에서 수집한 원본 데이터를 보관합니다.
+검증:
 
-- id
-- source
-- source_url
-- payload
-- collected_at
-- checksum
+```bash
+npm run lint
+npm test
+npm run build
+```
 
-## 구현 우선순위
+## 배포
 
-1. 공식 API와 데이터 구조 확인
-2. 샘플 지역 1곳 기준 데이터 수집 파이프라인 구현
-3. 앱 표시용 JSON 데이터셋 생성
-4. 지역 선택 및 선거 종류 선택 UI 구현
-5. 후보자 목록, 상세, 비교 UI 구현
-6. 출처와 수집 시각 표시
-7. 샘플 지역 확대
-8. 검색 고도화 검토
+Vercel 프로젝트에 연결되어 있으며 운영 URL은 다음과 같습니다.
 
-## 주의할 점
+```text
+https://before-you-vote.vercel.app
+```
 
-- 공식 데이터의 필드명과 응답 구조가 바뀔 수 있으므로 수집 계층과 서비스 계층을 분리합니다.
-- 후보자 정보는 민감할 수 있으므로 원문 출처, 수집 시각, 원본 데이터를 함께 보관합니다.
-- 비교 UI는 정보의 배치를 동일하게 유지하고, 강조 색상이나 문구로 특정 후보가 유리해 보이지 않도록 합니다.
-- MVP에서는 별도 데이터베이스, Redis, OpenSearch를 필수 구성으로 두지 않고 JSON 데이터셋만으로 먼저 동작하는 구조를 권장합니다.
-- 전국 단위 전체 구현 전에 샘플 지역으로 데이터 흐름을 검증합니다.
+프로덕션 배포:
+
+```bash
+npx -y vercel --prod
+```
+
+배포 후 위치 API 확인 예시:
+
+```bash
+curl -s "https://before-you-vote.vercel.app/api/reverse-geocode?latitude=37.5559&longitude=126.9238"
+```
+
+정상 응답 예시:
+
+```json
+{
+  "status": "mapped",
+  "addressName": "서울특별시 마포구 서교동",
+  "sido": "서울특별시",
+  "sigungu": "마포구",
+  "eupmyeondong": "서교동"
+}
+```
+
+## 주의 사항
+
+- 실제 투표 가능 선거는 주민등록상 주소와 투표안내문 기준으로 확인해야 합니다.
+- 위치 기반 지역 찾기는 브라우저 위치 권한과 외부 역지오코딩 API 결과에 의존하므로 실제 투표구와 다를 수 있습니다.
+- 읍면동-선거구 매핑이 있는 지역은 읍면동 선택 전까지 선거 목록을 표시하지 않습니다.
+- 공식 출처 데이터가 변경되면 JSON 데이터셋을 다시 수집/생성해야 합니다.
+- 정치 정보 특성상 UI 문구, 정렬, 색상 강조가 특정 후보에게 유리해 보이지 않도록 유지해야 합니다.
