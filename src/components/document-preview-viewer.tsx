@@ -16,6 +16,9 @@ type DocumentPreviewViewerProps = {
   sourceUrl: string;
 };
 
+const pagePlaceholderStyle = { aspectRatio: "538 / 737" };
+const pageRenderRootMargin = "360px 0px";
+
 export function DocumentPreviewViewer({ documentUrl, downloadUrl, sourceUrl }: DocumentPreviewViewerProps) {
   const [state, setState] = useState<PdfLoadState>({ status: "loading" });
 
@@ -103,7 +106,8 @@ function PdfPageCanvas({ pdf, pageNumber }: { pdf: PDFDocumentProxy; pageNumber:
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [shouldRender, setShouldRender] = useState(pageNumber === 1);
+  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">(pageNumber === 1 ? "loading" : "idle");
 
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -122,7 +126,29 @@ function PdfPageCanvas({ pdf, pageNumber }: { pdf: PDFDocumentProxy; pageNumber:
   }, []);
 
   useEffect(() => {
-    if (containerWidth <= 0) {
+    const container = containerRef.current;
+
+    if (!container || shouldRender) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShouldRender(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: pageRenderRootMargin }
+    );
+
+    observer.observe(container);
+
+    return () => observer.disconnect();
+  }, [shouldRender]);
+
+  useEffect(() => {
+    if (!shouldRender || containerWidth <= 0) {
       return;
     }
 
@@ -176,10 +202,17 @@ function PdfPageCanvas({ pdf, pageNumber }: { pdf: PDFDocumentProxy; pageNumber:
       cancelled = true;
       renderTask?.cancel();
     };
-  }, [containerWidth, pageNumber, pdf]);
+  }, [containerWidth, pageNumber, pdf, shouldRender]);
 
   return (
-    <div ref={containerRef} className="relative flex min-h-32 justify-center rounded-md bg-white shadow-sm ring-1 ring-line">
+    <div
+      ref={containerRef}
+      className="relative flex min-h-32 justify-center rounded-md bg-white shadow-sm ring-1 ring-line"
+      style={status === "ready" ? undefined : pagePlaceholderStyle}
+    >
+      {status === "idle" ? (
+        <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-muted">{pageNumber}</div>
+      ) : null}
       {status === "loading" ? (
         <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-muted">
           <Loader2 className="mr-2 animate-spin" size={14} />
@@ -191,7 +224,7 @@ function PdfPageCanvas({ pdf, pageNumber }: { pdf: PDFDocumentProxy; pageNumber:
           {pageNumber}쪽을 표시하지 못했습니다.
         </div>
       ) : (
-        <canvas ref={canvasRef} aria-label={`${pageNumber}쪽`} className="max-w-full" />
+        <canvas ref={canvasRef} aria-label={`${pageNumber}쪽`} className={`max-w-full ${status === "ready" ? "" : "opacity-0"}`} />
       )}
     </div>
   );
