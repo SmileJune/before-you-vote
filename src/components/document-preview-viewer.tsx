@@ -81,7 +81,10 @@ export function DocumentPreviewViewer({ documentUrl, downloadUrl, sourceUrl }: D
 
   return (
     <section className="mx-auto max-w-5xl px-3 py-4">
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="rounded-md border border-line bg-white px-3 py-2 text-xs leading-5 text-muted">
+          문서가 깨져 보이면 원본 열기나 PDF 다운로드로 확인하세요.
+        </p>
         <a className="inline-flex items-center gap-1 rounded-md border border-line bg-white px-3 py-2 text-xs font-semibold" href={downloadUrl}>
           <Download size={14} />
           PDF
