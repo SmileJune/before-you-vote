@@ -73,20 +73,22 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
     getServerInteractiveSnapshot
   );
   const [comparisonScrollLeft, setComparisonScrollLeft] = useState(0);
+  const comparisonLabelColumnWidth = 96;
+  const comparisonValueColumnWidth = 128;
   const comparisonGridStyle = useMemo(
     () => ({
-      gridTemplateColumns: `88px repeat(${comparison.candidates.length}, minmax(120px, 1fr))`,
-      minWidth: `max(100%, ${88 + comparison.candidates.length * 120}px)`
+      gridTemplateColumns: `${comparisonLabelColumnWidth}px repeat(${comparison.rows.length}, minmax(${comparisonValueColumnWidth}px, 1fr))`,
+      minWidth: `max(100%, ${comparisonLabelColumnWidth + comparison.rows.length * comparisonValueColumnWidth}px)`
     }),
-    [comparison.candidates.length]
+    [comparison.rows.length]
   );
-  const comparisonCandidateGridStyle = useMemo(
+  const comparisonHeaderGridStyle = useMemo(
     () => ({
-      gridTemplateColumns: `repeat(${comparison.candidates.length}, minmax(120px, 1fr))`,
-      minWidth: `max(100%, ${comparison.candidates.length * 120}px)`,
+      gridTemplateColumns: `repeat(${comparison.rows.length}, minmax(${comparisonValueColumnWidth}px, 1fr))`,
+      minWidth: `max(100%, ${comparison.rows.length * comparisonValueColumnWidth}px)`,
       transform: `translateX(-${comparisonScrollLeft}px)`
     }),
-    [comparison.candidates.length, comparisonScrollLeft]
+    [comparison.rows.length, comparisonScrollLeft]
   );
   const regionsBySido = useMemo(() => {
     const grouped = new Map<string, Dataset["regions"]>();
@@ -373,30 +375,36 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
             {comparison.candidates.length >= 2 ? (
               <div className="mt-3 rounded-md border border-line bg-white">
                 <div className="sticky top-0 z-30 flex rounded-t-md border-b border-line bg-paper text-xs font-bold shadow-[0_1px_0_0_#d9e1ec]">
-                  <div className="w-[88px] shrink-0 border-r border-line bg-paper px-3 py-2">항목</div>
+                  <div className="w-24 shrink-0 border-r border-line bg-paper px-3 py-2">후보</div>
                   <div className="min-w-0 flex-1 overflow-hidden">
-                    <div className="grid will-change-transform" style={comparisonCandidateGridStyle}>
-                      {comparison.candidates.map((candidate) => (
-                        <div key={candidate.id} className="min-w-0 bg-paper px-3 py-2">
-                          <span className="block truncate">{candidate.name}</span>
+                    <div className="grid will-change-transform" style={comparisonHeaderGridStyle}>
+                      {comparison.rows.map((row) => (
+                        <div key={row.label} className="min-w-0 bg-paper px-3 py-2">
+                          <span className="block truncate">{row.label}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 </div>
                 <div className="overflow-x-auto" onScroll={handleComparisonScroll}>
-                  {comparison.rows.map((row) => (
+                  {comparison.candidates.map((candidate, candidateIndex) => (
                     <div
-                      key={row.label}
+                      key={candidate.id}
                       className="grid border-b border-line text-xs last:border-b-0"
                       style={comparisonGridStyle}
                     >
-                      <div className="sticky left-0 z-20 border-r border-line bg-paper px-3 py-2 font-semibold text-muted">{row.label}</div>
-                      {row.values.map((value, index) => (
-                        <div key={`${row.label}-${index}`} className="min-w-0 whitespace-pre-line px-3 py-2 leading-5">
-                          {row.label === "정당" ? <PartyBadge partyName={value} /> : value}
-                        </div>
-                      ))}
+                      <div className="sticky left-0 z-20 border-r border-line bg-paper px-3 py-2 font-semibold text-ink">
+                        <span className="block truncate">{candidate.name}</span>
+                      </div>
+                      {comparison.rows.map((row) => {
+                        const value = row.values[candidateIndex] ?? "-";
+
+                        return (
+                          <div key={`${candidate.id}-${row.label}`} className="min-w-0 whitespace-pre-line px-3 py-2 leading-5">
+                            {row.label === "정당" ? <PartyBadge partyName={value} /> : value}
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
