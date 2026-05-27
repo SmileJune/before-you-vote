@@ -3,7 +3,7 @@
 import { AlertCircle, CheckCircle2, ChevronRight, FileText, MapPin, ShieldCheck } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { type UIEvent, useMemo, useState, useSyncExternalStore } from "react";
+import { type UIEvent, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   buildCandidateComparison,
   getElectionDetail,
@@ -26,6 +26,9 @@ const selectedRegionSlug = "seoul-mapo-seogyo";
 const dashboardSelectionStorageKey = "before-you-vote:dashboard-selection";
 const dashboardSelectionCookieName = "before-you-vote-dashboard-selection";
 const dashboardSelectionCookieMaxAgeSeconds = 60 * 60 * 24 * 180;
+const dashboardSelectionRegionParamName = "region";
+const dashboardSelectionAreaParamName = "area";
+const dashboardSelectionElectionParamName = "election";
 
 type DashboardSelection = {
   regionSlug: string;
@@ -94,6 +97,36 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
 
     return [...grouped.entries()];
   }, [dataset.regions]);
+
+  useEffect(() => {
+    function syncSelectionFromUrl() {
+      const urlSelection = readDashboardSelectionUrl();
+
+      if (!urlSelection) {
+        return;
+      }
+
+      const nextSelection = normalizeDashboardSelection(dataset, urlSelection);
+
+      setSelection((currentSelection) => {
+        if (areDashboardSelectionsEqual(currentSelection, nextSelection)) {
+          return currentSelection;
+        }
+
+        return nextSelection;
+      });
+      setComparisonScrollLeft(0);
+    }
+
+    syncSelectionFromUrl();
+    window.addEventListener("pageshow", syncSelectionFromUrl);
+    window.addEventListener("popstate", syncSelectionFromUrl);
+
+    return () => {
+      window.removeEventListener("pageshow", syncSelectionFromUrl);
+      window.removeEventListener("popstate", syncSelectionFromUrl);
+    };
+  }, [dataset]);
 
   function handleRegionMapped(mapping: LocationMapping) {
     if (mapping.type === "reverse-geocoded") {
@@ -164,6 +197,7 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
     setComparisonScrollLeft(0);
     setSelection(nextSelection);
     persistDashboardSelection(nextSelection);
+    replaceDashboardSelectionUrl(nextSelection);
   }
 
   return (
@@ -567,6 +601,53 @@ function persistDashboardSelection(selection: DashboardSelection) {
     `Max-Age=${dashboardSelectionCookieMaxAgeSeconds}`,
     "SameSite=Lax"
   ].join("; ");
+}
+
+function replaceDashboardSelectionUrl(selection: DashboardSelection) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  url.searchParams.set(dashboardSelectionRegionParamName, selection.regionSlug);
+  updateOptionalSearchParam(url, dashboardSelectionAreaParamName, selection.areaId);
+  updateOptionalSearchParam(url, dashboardSelectionElectionParamName, selection.electionId);
+
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function updateOptionalSearchParam(url: URL, name: string, value: string) {
+  if (value) {
+    url.searchParams.set(name, value);
+    return;
+  }
+
+  url.searchParams.delete(name);
+}
+
+function readDashboardSelectionUrl(): Partial<DashboardSelection> | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const regionSlug = params.get(dashboardSelectionRegionParamName) ?? undefined;
+  const areaId = params.get(dashboardSelectionAreaParamName) ?? undefined;
+  const electionId = params.get(dashboardSelectionElectionParamName) ?? undefined;
+
+  if (!regionSlug && !areaId && !electionId) {
+    return null;
+  }
+
+  return {
+    regionSlug,
+    areaId,
+    electionId
+  };
+}
+
+function areDashboardSelectionsEqual(first: DashboardSelection, second: DashboardSelection) {
+  return first.regionSlug === second.regionSlug && first.areaId === second.areaId && first.electionId === second.electionId;
 }
 
 type LocationMapping =
