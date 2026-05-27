@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
+import { DocumentPreviewBackLink } from "@/components/document-preview-back-link";
 import { DocumentPreviewViewer } from "@/components/document-preview-viewer";
 import { getDocumentProxyPath, parseAllowedDocumentUrl } from "@/domain/document-links";
 
@@ -44,9 +45,7 @@ export default async function DocumentPreviewPage({ searchParams }: DocumentPrev
     <main className="min-h-screen bg-paper text-ink">
       <header className="sticky top-0 z-20 border-b border-line bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-2 px-3 py-3">
-          <Link aria-label="돌아가기" className="rounded-md border border-line p-2" href="/">
-            <ArrowLeft size={18} />
-          </Link>
+          <DocumentPreviewBackLink />
           <h1 className="min-w-0 flex-1 truncate text-sm font-bold">{title}</h1>
           <a
             aria-label="원본 열기"

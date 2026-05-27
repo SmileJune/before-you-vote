@@ -2,6 +2,7 @@
 
 import { AlertCircle, Download, Loader2 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { documentPreviewLeaveEventName } from "@/components/document-preview-back-link";
 
 type PDFDocumentProxy = import("pdfjs-dist").PDFDocumentProxy;
 
@@ -26,6 +27,12 @@ export function DocumentPreviewViewer({ documentUrl, downloadUrl, sourceUrl }: D
     let cancelled = false;
     let loadingTask: { destroy: () => Promise<void>; promise: Promise<PDFDocumentProxy> } | null = null;
 
+    function cancelLoad() {
+      cancelled = true;
+
+      void loadingTask?.destroy();
+    }
+
     async function loadPdf() {
       try {
         const pdfjs = await import("pdfjs-dist");
@@ -49,10 +56,13 @@ export function DocumentPreviewViewer({ documentUrl, downloadUrl, sourceUrl }: D
     }
 
     void loadPdf();
+    window.addEventListener(documentPreviewLeaveEventName, cancelLoad);
+    window.addEventListener("pagehide", cancelLoad);
 
     return () => {
-      cancelled = true;
-      void loadingTask?.destroy();
+      window.removeEventListener(documentPreviewLeaveEventName, cancelLoad);
+      window.removeEventListener("pagehide", cancelLoad);
+      cancelLoad();
     };
   }, [documentUrl]);
 
@@ -155,6 +165,11 @@ function PdfPageCanvas({ pdf, pageNumber }: { pdf: PDFDocumentProxy; pageNumber:
     let cancelled = false;
     let renderTask: { cancel: () => void; promise: Promise<unknown> } | null = null;
 
+    function cancelRender() {
+      cancelled = true;
+      renderTask?.cancel();
+    }
+
     async function renderPage() {
       try {
         const canvas = canvasRef.current;
@@ -197,10 +212,13 @@ function PdfPageCanvas({ pdf, pageNumber }: { pdf: PDFDocumentProxy; pageNumber:
     }
 
     void renderPage();
+    window.addEventListener(documentPreviewLeaveEventName, cancelRender);
+    window.addEventListener("pagehide", cancelRender);
 
     return () => {
-      cancelled = true;
-      renderTask?.cancel();
+      window.removeEventListener(documentPreviewLeaveEventName, cancelRender);
+      window.removeEventListener("pagehide", cancelRender);
+      cancelRender();
     };
   }, [containerWidth, pageNumber, pdf, shouldRender]);
 

@@ -2,7 +2,8 @@
 
 import { AlertCircle, CheckCircle2, ChevronRight, FileText, MapPin, ShieldCheck } from "lucide-react";
 import Image from "next/image";
-import { type UIEvent, useMemo, useState } from "react";
+import Link from "next/link";
+import { type UIEvent, useMemo, useState, useSyncExternalStore } from "react";
 import {
   buildCandidateComparison,
   getElectionDetail,
@@ -63,6 +64,11 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
   const activeElectionId = elections.some((item) => item.id === selectedElectionId) ? selectedElectionId : elections[0]?.id ?? "";
   const election = activeElectionId ? getElectionDetail(dataset, activeElectionId) : null;
   const comparison = useMemo(() => buildCandidateComparison(election?.candidates ?? []), [election]);
+  const isInteractive = useSyncExternalStore(
+    subscribeToInteractiveState,
+    getInteractiveSnapshot,
+    getServerInteractiveSnapshot
+  );
   const [comparisonScrollLeft, setComparisonScrollLeft] = useState(0);
   const comparisonGridStyle = useMemo(
     () => ({
@@ -406,9 +412,19 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
                       <CandidateDetailTable candidate={candidate} electionTitle={election.title} districtName={election.districtName} />
 
                       <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs font-semibold">
-                        <DocumentLink label="공보" url={candidate.pamphletPdf?.url} status={candidate.pamphletPdf?.status} />
-                        <DocumentLink label="5대공약" url={candidate.pledgePdf?.url} status={candidate.pledgePdf?.status} />
-                        <DocumentLink label="공개자료" url={candidate.disclosureViewerUrl} status="available" />
+                        <DocumentLink
+                          isInteractive={isInteractive}
+                          label="공보"
+                          url={candidate.pamphletPdf?.url}
+                          status={candidate.pamphletPdf?.status}
+                        />
+                        <DocumentLink
+                          isInteractive={isInteractive}
+                          label="5대공약"
+                          url={candidate.pledgePdf?.url}
+                          status={candidate.pledgePdf?.status}
+                        />
+                        <DocumentLink isInteractive={isInteractive} label="공개자료" url={candidate.disclosureViewerUrl} status="available" />
                       </div>
                       <p className="mt-3 text-[11px] leading-4 text-muted">
                         <span className="block">출처: {candidate.source.label}</span>
@@ -592,24 +608,45 @@ function normalizeDashboardSelection(dataset: Dataset, selection: Partial<Dashbo
 }
 
 function DocumentLink({
+  isInteractive,
   label,
   url,
   status
 }: {
+  isInteractive: boolean;
   label: string;
   url?: string | null;
   status?: "available" | "pending" | "missing";
 }) {
   if (status === "available" && url) {
+    if (!isInteractive) {
+      return (
+        <span className="flex items-center justify-center gap-1 rounded-md border border-line px-2 py-2 text-muted">
+          <FileText size={14} />
+          {label}
+        </span>
+      );
+    }
+
     const href = getDocumentLinkHref(url, label);
     const isExternalLink = href.startsWith("http://") || href.startsWith("https://");
+    const className = "flex items-center justify-center gap-1 rounded-md bg-civic px-2 py-2 text-white";
+
+    if (!isExternalLink) {
+      return (
+        <Link href={href} className={className}>
+          <FileText size={14} />
+          {label}
+        </Link>
+      );
+    }
 
     return (
       <a
         href={href}
-        className="flex items-center justify-center gap-1 rounded-md bg-civic px-2 py-2 text-white"
-        target={isExternalLink ? "_blank" : undefined}
-        rel={isExternalLink ? "noreferrer" : undefined}
+        className={className}
+        target="_blank"
+        rel="noreferrer"
       >
         <FileText size={14} />
         {label}
@@ -635,4 +672,16 @@ function getDocumentLinkHref(url: string, label: string) {
   }
 
   return url;
+}
+
+function subscribeToInteractiveState() {
+  return () => undefined;
+}
+
+function getInteractiveSnapshot() {
+  return true;
+}
+
+function getServerInteractiveSnapshot() {
+  return false;
 }
