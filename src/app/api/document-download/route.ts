@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-
-const allowedDocumentHost = "cdn.nec.go.kr";
-const allowedDocumentPathPrefix = "/policy_pdf/";
+import { parseAllowedDocumentUrl } from "@/domain/document-links";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const source = searchParams.get("url");
   const sourceUrl = parseAllowedDocumentUrl(source);
+  const disposition = searchParams.get("download") === "1" ? "attachment" : "inline";
 
   if (!sourceUrl) {
     return NextResponse.json({ status: "invalid_request" }, { status: 400 });
@@ -25,7 +24,7 @@ export async function GET(request: Request) {
   const filename = getDocumentFilename(sourceUrl);
   const headers = new Headers({
     "Cache-Control": "public, max-age=86400",
-    "Content-Disposition": `attachment; filename=\"${filename}\"; filename*=UTF-8''${encodeRFC5987ValueChars(filename)}`,
+    "Content-Disposition": `${disposition}; filename=\"${filename}\"; filename*=UTF-8''${encodeRFC5987ValueChars(filename)}`,
     "Content-Type": "application/pdf",
     "X-Content-Type-Options": "nosniff"
   });
@@ -39,28 +38,6 @@ export async function GET(request: Request) {
     status: 200,
     headers
   });
-}
-
-function parseAllowedDocumentUrl(value: string | null) {
-  if (!value) {
-    return null;
-  }
-
-  try {
-    const url = new URL(value);
-
-    if (url.protocol !== "https:" || url.hostname !== allowedDocumentHost) {
-      return null;
-    }
-
-    if (!url.pathname.startsWith(allowedDocumentPathPrefix) || !url.pathname.endsWith(".pdf")) {
-      return null;
-    }
-
-    return url;
-  } catch {
-    return null;
-  }
 }
 
 function getDocumentFilename(url: URL) {

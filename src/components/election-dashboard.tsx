@@ -19,6 +19,7 @@ import { getSubregionOptions } from "@/domain/region-hierarchy";
 import type { Candidate, CandidateDocument, Dataset } from "@/domain/types";
 import { LocationAssist } from "@/components/location-assist";
 import { getPartyColor } from "@/domain/party-colors";
+import { getDocumentPreviewPath, parseAllowedDocumentUrl } from "@/domain/document-links";
 
 const selectedRegionSlug = "seoul-mapo-seogyo";
 const dashboardSelectionStorageKey = "before-you-vote:dashboard-selection";
@@ -600,14 +601,15 @@ function DocumentLink({
   status?: "available" | "pending" | "missing";
 }) {
   if (status === "available" && url) {
-    const href = getDocumentLinkHref(url);
+    const href = getDocumentLinkHref(url, label);
+    const isExternalLink = href.startsWith("http://") || href.startsWith("https://");
 
     return (
       <a
         href={href}
         className="flex items-center justify-center gap-1 rounded-md bg-civic px-2 py-2 text-white"
-        target="_blank"
-        rel="noreferrer"
+        target={isExternalLink ? "_blank" : undefined}
+        rel={isExternalLink ? "noreferrer" : undefined}
       >
         <FileText size={14} />
         {label}
@@ -627,15 +629,9 @@ function DocumentLink({
   return <span className="rounded-md border border-line px-2 py-2 text-muted">없음</span>;
 }
 
-function getDocumentLinkHref(url: string) {
-  try {
-    const sourceUrl = new URL(url);
-
-    if (sourceUrl.protocol === "https:" && sourceUrl.hostname === "cdn.nec.go.kr" && sourceUrl.pathname.endsWith(".pdf")) {
-      return `/api/document-download?url=${encodeURIComponent(url)}`;
-    }
-  } catch {
-    return url;
+function getDocumentLinkHref(url: string, label: string) {
+  if (parseAllowedDocumentUrl(url)) {
+    return getDocumentPreviewPath(url, label);
   }
 
   return url;
