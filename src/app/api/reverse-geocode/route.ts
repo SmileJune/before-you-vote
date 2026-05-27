@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
-
-type KakaoRegionDocument = {
-  region_type: "H" | "B";
-  address_name: string;
-  region_1depth_name: string;
-  region_2depth_name: string;
-  region_3depth_name: string;
-  region_4depth_name: string;
-};
-
-type KakaoRegionResponse = {
-  documents?: KakaoRegionDocument[];
-};
+import {
+  getNaverMapsCredentials,
+  reverseGeocodeWithKakao,
+  reverseGeocodeWithNaver,
+  type ReverseGeocodeResult
+} from "@/domain/reverse-geocode-providers";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -22,42 +15,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ status: "invalid_request" }, { status: 400 });
   }
 
-  const apiKey = process.env.KAKAO_REST_API_KEY;
+  const coordinates = { latitude, longitude };
+  const naverCredentials = getNaverMapsCredentials(process.env);
+  const kakaoApiKey = process.env.KAKAO_REST_API_KEY;
 
-  if (!apiKey) {
-    return NextResponse.json({ status: "unconfigured" }, { status: 200 });
-  }
+  if (naverCredentials) {
+    const result = await reverseGeocodeWithNaver(coordinates, naverCredentials);
 
-  const kakaoUrl = new URL("https://dapi.kakao.com/v2/local/geo/coord2regioncode.json");
-  kakaoUrl.searchParams.set("x", String(longitude));
-  kakaoUrl.searchParams.set("y", String(latitude));
-  kakaoUrl.searchParams.set("input_coord", "WGS84");
-
-  const response = await fetch(kakaoUrl, {
-    headers: {
-      Authorization: `KakaoAK ${apiKey}`
+    if (result.status === "mapped" || !kakaoApiKey) {
+      return jsonForReverseGeocodeResult(result);
     }
-  });
-
-  if (!response.ok) {
-    return NextResponse.json({ status: "failed" }, { status: 502 });
   }
 
-  const payload = (await response.json()) as KakaoRegionResponse;
-  const administrativeRegion =
-    payload.documents?.find((document) => document.region_type === "H") ?? payload.documents?.[0] ?? null;
-
-  if (!administrativeRegion) {
-    return NextResponse.json({ status: "unsupported" }, { status: 200 });
+  if (kakaoApiKey) {
+    return jsonForReverseGeocodeResult(await reverseGeocodeWithKakao(coordinates, kakaoApiKey));
   }
 
-  return NextResponse.json({
-    status: "mapped",
-    addressName: administrativeRegion.address_name,
-    sido: administrativeRegion.region_1depth_name,
-    sigungu: administrativeRegion.region_2depth_name,
-    eupmyeondong: administrativeRegion.region_3depth_name
-  });
+  return NextResponse.json({ status: "unconfigured" }, { status: 200 });
+}
+
+function jsonForReverseGeocodeResult(result: ReverseGeocodeResult) {
+  return NextResponse.json(result, { status: result.status === "failed" ? 502 : 200 });
 }
 
 function isValidLatitude(value: number) {
