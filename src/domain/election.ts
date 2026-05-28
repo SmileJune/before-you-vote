@@ -9,7 +9,7 @@ import type {
   QuickFact
 } from "./types";
 
-export function getRegionBySlug(dataset: Dataset, slug: string) {
+export function getRegionBySlug(dataset: Pick<Dataset, "regions">, slug: string) {
   const region = dataset.regions.find((item) => item.slug === slug);
 
   if (!region) {
@@ -19,7 +19,7 @@ export function getRegionBySlug(dataset: Dataset, slug: string) {
   return region;
 }
 
-export function getRegionElections(dataset: Dataset, regionId: string): Election[] {
+export function getRegionElections(dataset: Pick<Dataset, "elections">, regionId: string): Election[] {
   return dataset.elections
     .filter((election) => election.regionIds.includes(regionId))
     .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, "ko"));

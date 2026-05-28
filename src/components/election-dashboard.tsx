@@ -6,7 +6,6 @@ import Link from "next/link";
 import { type UIEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   buildCandidateComparison,
-  getElectionDetail,
   getRegionBySlug,
   getRegionElections
 } from "@/domain/election";
@@ -17,19 +16,19 @@ import {
 } from "@/domain/district-mapping";
 import { resolveReverseGeocodedRegion, type ReverseGeocodedRegion } from "@/domain/reverse-geocode";
 import { getRegionSelectionPath, getSidoRegionOptions, getSubregionOptions } from "@/domain/region-hierarchy";
-import type { Candidate, CandidateDocument, Dataset, Region } from "@/domain/types";
+import type { Candidate, CandidateDocument, Dataset, ElectionDetail, Region } from "@/domain/types";
 import { LocationAssist } from "@/components/location-assist";
 import { getPartyColor } from "@/domain/party-colors";
 import { getDocumentPreviewPath, parseAllowedDocumentUrl } from "@/domain/document-links";
 
 const selectedRegionSlug = "seoul-mapo-seogyo";
 const dashboardSelectionStorageKey = "before-you-vote:dashboard-selection";
-const dashboardSelectionCookieName = "before-you-vote-dashboard-selection";
-const dashboardSelectionCookieMaxAgeSeconds = 60 * 60 * 24 * 180;
+const legacyDashboardSelectionCookieName = "before-you-vote-dashboard-selection";
 const dashboardSelectionRegionParamName = "region";
 const dashboardSelectionAreaParamName = "area";
 const dashboardSelectionElectionParamName = "election";
 const dashboardReturnScrollStorageKey = "before-you-vote:dashboard-return-scroll";
+const electionDetailApiPath = "/api/election-detail";
 
 type DashboardSelection = {
   regionSlug: string;
@@ -37,8 +36,10 @@ type DashboardSelection = {
   electionId: string;
 };
 
+type DashboardDataset = Pick<Dataset, "regions" | "elections">;
+
 type ElectionDashboardProps = {
-  dataset: Dataset;
+  dataset: DashboardDataset;
   initialSelection?: Partial<DashboardSelection> | null;
 };
 
@@ -77,7 +78,11 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
       : regionElections;
   const selectedElectionId = selection.electionId;
   const activeElectionId = elections.some((item) => item.id === selectedElectionId) ? selectedElectionId : elections[0]?.id ?? "";
-  const election = activeElectionId ? getElectionDetail(dataset, activeElectionId) : null;
+  const [electionDetails, setElectionDetails] = useState<Record<string, ElectionDetail>>({});
+  const [failedElectionId, setFailedElectionId] = useState<string | null>(null);
+  const election = activeElectionId ? electionDetails[activeElectionId] ?? null : null;
+  const isElectionDetailLoading = Boolean(activeElectionId && !election && failedElectionId !== activeElectionId);
+  const hasElectionDetailError = Boolean(activeElectionId && !election && failedElectionId === activeElectionId);
   const comparison = useMemo(() => buildCandidateComparison(election?.candidates ?? []), [election]);
   const isInteractive = useSyncExternalStore(
     subscribeToInteractiveState,
@@ -121,6 +126,53 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
     setCanComparisonScrollRight(nextIsScrollable && container.scrollLeft < maxScrollLeft - 1);
   }, []);
   useEffect(() => {
+    if (!activeElectionId || electionDetails[activeElectionId]) {
+      return;
+    }
+
+    const abortController = new AbortController();
+    const params = new URLSearchParams({ electionId: activeElectionId });
+
+    fetch(`${electionDetailApiPath}?${params.toString()}`, {
+      headers: {
+        Accept: "application/json"
+      },
+      signal: abortController.signal
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load election detail.");
+        }
+
+        return response.json() as Promise<ElectionDetail>;
+      })
+      .then((detail) => {
+        setElectionDetails((currentDetails) => {
+          if (currentDetails[detail.id]) {
+            return currentDetails;
+          }
+
+          return {
+            ...currentDetails,
+            [detail.id]: detail
+          };
+        });
+        setFailedElectionId((currentElectionId) => (currentElectionId === detail.id ? null : currentElectionId));
+      })
+      .catch(() => {
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        setFailedElectionId(activeElectionId);
+      });
+
+    return () => {
+      abortController.abort();
+    };
+  }, [activeElectionId, electionDetails]);
+
+  useEffect(() => {
     const container = comparisonScrollContainerRef.current;
 
     if (!container) {
@@ -154,6 +206,8 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
   }, [comparison.rows.length, updateComparisonScrollState]);
 
   useEffect(() => {
+    clearLegacyDashboardSelectionCookie();
+
     function syncSelectionFromUrl() {
       const urlSelection = readDashboardSelectionUrl() ?? readPersistedDashboardSelection();
 
@@ -184,6 +238,10 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
   }, [dataset]);
 
   useEffect(() => {
+    if (activeElectionId && !election) {
+      return;
+    }
+
     function restoreScroll() {
       restoreDashboardReturnScroll();
     }
@@ -194,7 +252,7 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
     return () => {
       window.removeEventListener("pageshow", restoreScroll);
     };
-  }, [activeElectionId, selectedAreaId, selectedRegion]);
+  }, [activeElectionId, election, selectedAreaId, selectedRegion]);
 
   function handleRegionMapped(mapping: LocationMapping) {
     if (mapping.type === "reverse-geocoded") {
@@ -464,7 +522,15 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
               <h2 className="text-base font-bold">후보 비교</h2>
               <span className="text-xs text-muted">전체 {comparison.candidates.length}명</span>
             </div>
-            {comparison.candidates.length >= 2 ? (
+            {isElectionDetailLoading ? (
+              <div className="mt-3 rounded-md border border-line bg-white p-4 text-xs leading-5 text-muted">
+                후보 정보를 불러오는 중입니다.
+              </div>
+            ) : hasElectionDetailError ? (
+              <div className="mt-3 rounded-md border border-line bg-white p-4 text-xs leading-5 text-muted">
+                후보 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
+              </div>
+            ) : comparison.candidates.length >= 2 ? (
               <div className="relative mt-3 overflow-hidden rounded-md border border-line bg-white">
                 <div className="sticky top-0 z-30 flex rounded-t-md border-b border-line bg-paper text-xs font-bold shadow-[0_1px_0_0_#d9e1ec]">
                   <div className="w-24 shrink-0 border-r border-line bg-paper px-3 py-2">후보</div>
@@ -592,6 +658,17 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
                   </p>
                 </div>
               )}
+            </section>
+          ) : activeElectionId ? (
+            <section className="bg-white px-5 py-5">
+              <div className="rounded-md border border-line bg-paper p-4">
+                <p className="text-sm font-bold">
+                  {hasElectionDetailError ? "후보 정보를 불러오지 못했습니다" : "후보 정보를 불러오는 중입니다"}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  {hasElectionDetailError ? "네트워크 상태를 확인한 뒤 다시 선택해 주세요." : "선택한 선거의 후보 상세만 가져오고 있습니다."}
+                </p>
+              </div>
             </section>
           ) : null}
         </>
@@ -725,13 +802,14 @@ function persistDashboardSelection(selection: DashboardSelection) {
   } catch {
     // Storage can be unavailable in private browsing or restricted webviews.
   }
+}
 
-  document.cookie = [
-    `${dashboardSelectionCookieName}=${encodeURIComponent(serializedSelection)}`,
-    "Path=/",
-    `Max-Age=${dashboardSelectionCookieMaxAgeSeconds}`,
-    "SameSite=Lax"
-  ].join("; ");
+function clearLegacyDashboardSelectionCookie() {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  document.cookie = `${legacyDashboardSelectionCookieName}=; Path=/; Max-Age=0; SameSite=Lax`;
 }
 
 function replaceDashboardSelectionUrl(selection: DashboardSelection) {
@@ -782,37 +860,12 @@ function readPersistedDashboardSelection(): Partial<DashboardSelection> | null {
     return null;
   }
 
-  const storedSelection = readDashboardSelectionFromStorage();
-
-  if (storedSelection) {
-    return storedSelection;
-  }
-
-  return readDashboardSelectionFromCookie();
+  return readDashboardSelectionFromStorage();
 }
 
 function readDashboardSelectionFromStorage(): Partial<DashboardSelection> | null {
   try {
     return parseDashboardSelection(window.localStorage.getItem(dashboardSelectionStorageKey));
-  } catch {
-    return null;
-  }
-}
-
-function readDashboardSelectionFromCookie(): Partial<DashboardSelection> | null {
-  const prefix = `${dashboardSelectionCookieName}=`;
-  const value = document.cookie
-    .split(";")
-    .map((item) => item.trim())
-    .find((item) => item.startsWith(prefix))
-    ?.slice(prefix.length);
-
-  if (!value) {
-    return null;
-  }
-
-  try {
-    return parseDashboardSelection(decodeURIComponent(value));
   } catch {
     return null;
   }
@@ -852,7 +905,7 @@ type LocationMapping =
       displayName: string;
     };
 
-function normalizeDashboardSelection(dataset: Dataset, selection: Partial<DashboardSelection>): DashboardSelection {
+function normalizeDashboardSelection(dataset: DashboardDataset, selection: Partial<DashboardSelection>): DashboardSelection {
   const regionSlug =
     selection.regionSlug && dataset.regions.some((item) => item.slug === selection.regionSlug) ? selection.regionSlug : selectedRegionSlug;
   const region = getRegionBySlug(dataset, regionSlug);

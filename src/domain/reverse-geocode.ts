@@ -35,7 +35,7 @@ const sidoAliases = new Map([
 ]);
 
 export function resolveReverseGeocodedRegion(
-  dataset: Dataset,
+  dataset: Pick<Dataset, "regions">,
   geocoded: ReverseGeocodedRegion
 ): ResolvedLocationSelection | null {
   const normalizedSido = normalizeSido(geocoded.sido);
