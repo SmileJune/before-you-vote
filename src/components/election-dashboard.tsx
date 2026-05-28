@@ -16,8 +16,8 @@ import {
   getAdministrativeAreaOptions
 } from "@/domain/district-mapping";
 import { resolveReverseGeocodedRegion, type ReverseGeocodedRegion } from "@/domain/reverse-geocode";
-import { getSubregionOptions } from "@/domain/region-hierarchy";
-import type { Candidate, CandidateDocument, Dataset } from "@/domain/types";
+import { getRegionSelectionPath, getSidoRegionOptions, getSubregionOptions } from "@/domain/region-hierarchy";
+import type { Candidate, CandidateDocument, Dataset, Region } from "@/domain/types";
 import { LocationAssist } from "@/components/location-assist";
 import { getPartyColor } from "@/domain/party-colors";
 import { getDocumentPreviewPath, parseAllowedDocumentUrl } from "@/domain/document-links";
@@ -29,6 +29,7 @@ const dashboardSelectionCookieMaxAgeSeconds = 60 * 60 * 24 * 180;
 const dashboardSelectionRegionParamName = "region";
 const dashboardSelectionAreaParamName = "area";
 const dashboardSelectionElectionParamName = "election";
+const dashboardReturnScrollStorageKey = "before-you-vote:dashboard-return-scroll";
 
 type DashboardSelection = {
   regionSlug: string;
@@ -50,6 +51,17 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
   const selectedRegion = selection.regionSlug;
   const selectedAreaId = selection.areaId;
   const region = getRegionBySlug(dataset, selectedRegion);
+  const regionSelectionPath = useMemo(() => getRegionSelectionPath(dataset.regions, region), [dataset.regions, region]);
+  const sidoRegionOptions = useMemo(() => getSidoRegionOptions(dataset.regions), [dataset.regions]);
+  const selectedSidoRegion = regionSelectionPath[0] ?? region;
+  const selectedSigunguRegion = regionSelectionPath[1] ?? null;
+  const selectedNestedRegion = regionSelectionPath[2] ?? null;
+  const sigunguOptions = getSubregionOptions(dataset.regions, selectedSidoRegion);
+  const nestedRegionOptions = selectedSigunguRegion ? getSubregionOptions(dataset.regions, selectedSigunguRegion) : [];
+  const selectedSigunguRegionSlug =
+    selectedSigunguRegion && sigunguOptions.some((item) => item.slug === selectedSigunguRegion.slug) ? selectedSigunguRegion.slug : "";
+  const selectedNestedRegionSlug =
+    selectedNestedRegion && nestedRegionOptions.some((item) => item.slug === selectedNestedRegion.slug) ? selectedNestedRegion.slug : "";
   const regionElections = getRegionElections(dataset, region.id);
   const subregionOptions = getSubregionOptions(dataset.regions, region);
   const areaOptions = getAdministrativeAreaOptions(region.slug);
@@ -108,16 +120,6 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
     setIsComparisonScrollable(nextIsScrollable);
     setCanComparisonScrollRight(nextIsScrollable && container.scrollLeft < maxScrollLeft - 1);
   }, []);
-  const regionsBySido = useMemo(() => {
-    const grouped = new Map<string, Dataset["regions"]>();
-
-    for (const item of dataset.regions) {
-      grouped.set(item.sido, [...(grouped.get(item.sido) ?? []), item]);
-    }
-
-    return [...grouped.entries()];
-  }, [dataset.regions]);
-
   useEffect(() => {
     const container = comparisonScrollContainerRef.current;
 
@@ -180,6 +182,19 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
       window.removeEventListener("popstate", syncSelectionFromUrl);
     };
   }, [dataset]);
+
+  useEffect(() => {
+    function restoreScroll() {
+      restoreDashboardReturnScroll();
+    }
+
+    restoreScroll();
+    window.addEventListener("pageshow", restoreScroll);
+
+    return () => {
+      window.removeEventListener("pageshow", restoreScroll);
+    };
+  }, [activeElectionId, selectedAreaId, selectedRegion]);
 
   function handleRegionMapped(mapping: LocationMapping) {
     if (mapping.type === "reverse-geocoded") {
@@ -290,49 +305,75 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
           </div>
         </div>
         <div className="mt-4">
-          <label htmlFor="region-select" className="text-xs font-semibold text-muted">
+          <p className="text-xs font-semibold text-muted">
             지역 직접 선택
-          </label>
-          <select
-            id="region-select"
-            value={selectedRegion}
-            onChange={(event) => handleRegionSelected(event.target.value)}
-            className="mt-2 w-full rounded-md border border-line bg-paper px-3 py-3 text-sm font-semibold text-ink"
-          >
-            {regionsBySido.map(([sido, items]) => (
-              <optgroup key={sido} label={sido}>
-                {items.map((item) => (
+          </p>
+          <div className="mt-2 grid gap-3">
+            <div>
+              <label htmlFor="sido-select" className="text-[11px] font-semibold text-muted">
+                시도
+              </label>
+              <select
+                id="sido-select"
+                value={selectedSidoRegion.slug}
+                onChange={(event) => handleRegionSelected(event.target.value)}
+                className="mt-1 w-full rounded-md border border-line bg-paper px-3 py-3 text-sm font-semibold text-ink"
+              >
+                {sidoRegionOptions.map((item) => (
                   <option key={item.id} value={item.slug}>
                     {item.displayName}
                   </option>
                 ))}
-              </optgroup>
-            ))}
-          </select>
-        </div>
-        {subregionOptions.length > 0 ? (
-          <div className="mt-4 rounded-md border border-line bg-paper p-3">
-            <label htmlFor="subregion-select" className="text-xs font-semibold text-muted">
-              세부 지역 선택
-            </label>
-            <select
-              id="subregion-select"
-              value=""
-              onChange={(event) => handleRegionSelected(event.target.value)}
-              className="mt-2 w-full rounded-md border border-line bg-white px-3 py-3 text-sm font-semibold text-ink"
-            >
-              <option value="">구를 선택하세요</option>
-              {subregionOptions.map((option) => (
-                <option key={option.id} value={option.slug}>
-                  {option.displayName}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="sigungu-select" className="text-[11px] font-semibold text-muted">
+                시군구
+              </label>
+              <select
+                id="sigungu-select"
+                value={selectedSigunguRegionSlug}
+                onChange={(event) => handleRegionSelected(event.target.value)}
+                className="mt-1 w-full rounded-md border border-line bg-paper px-3 py-3 text-sm font-semibold text-ink disabled:text-muted"
+                disabled={sigunguOptions.length === 0}
+              >
+                <option value="" disabled>
+                  시군구 선택
                 </option>
-              ))}
-            </select>
-            <p className="mt-2 text-xs leading-5 text-muted">
-              같은 시 안에서도 관할 구와 읍면동에 따라 지방의원 선거구가 달라집니다.
-            </p>
+                {sigunguOptions.map((item) => (
+                  <option key={item.id} value={item.slug}>
+                    {getRegionStepLabel(item, selectedSidoRegion)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {nestedRegionOptions.length > 0 ? (
+              <div>
+                <label htmlFor="nested-region-select" className="text-[11px] font-semibold text-muted">
+                  구
+                </label>
+                <select
+                  id="nested-region-select"
+                  value={selectedNestedRegionSlug}
+                  onChange={(event) => handleRegionSelected(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-line bg-paper px-3 py-3 text-sm font-semibold text-ink"
+                >
+                  <option value="" disabled>
+                    구 선택
+                  </option>
+                  {nestedRegionOptions.map((item) => (
+                    <option key={item.id} value={item.slug}>
+                      {getRegionStepLabel(item, selectedSigunguRegion)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
           </div>
-        ) : areaOptions.length > 0 ? (
+        </div>
+        {areaOptions.length > 0 ? (
           <div className="mt-4 rounded-md border border-line bg-paper p-3">
             <label htmlFor="area-select" className="text-xs font-semibold text-muted">
               읍면동 선택
@@ -658,6 +699,20 @@ function formatCollectedDate(value: string) {
   return date.toISOString().slice(0, 10);
 }
 
+function getRegionStepLabel(region: Region, parentRegion: Region | null) {
+  if (!parentRegion) {
+    return region.displayName;
+  }
+
+  if (region.displayName.startsWith(parentRegion.displayName)) {
+    const label = region.displayName.slice(parentRegion.displayName.length).trim();
+
+    return label || region.displayName;
+  }
+
+  return region.displayName;
+}
+
 function persistDashboardSelection(selection: DashboardSelection) {
   if (typeof window === "undefined") {
     return;
@@ -844,13 +899,13 @@ function DocumentLink({
       );
     }
 
-    const href = getDocumentLinkHref(url, label);
+    const href = getDocumentLinkHref(url, label, getCurrentDashboardReturnPath());
     const isExternalLink = href.startsWith("http://") || href.startsWith("https://");
     const className = "flex items-center justify-center gap-1 rounded-md bg-civic px-2 py-2 text-white";
 
     if (!isExternalLink) {
       return (
-        <Link href={href} className={className}>
+        <Link href={href} className={className} onClick={storeDashboardReturnScroll} onPointerDown={storeDashboardReturnScroll}>
           <FileText size={14} />
           {label}
         </Link>
@@ -882,12 +937,114 @@ function DocumentLink({
   return <span className="rounded-md border border-line px-2 py-2 text-muted">없음</span>;
 }
 
-function getDocumentLinkHref(url: string, label: string) {
+function getDocumentLinkHref(url: string, label: string, returnTo?: string) {
   if (parseAllowedDocumentUrl(url)) {
-    return getDocumentPreviewPath(url, label);
+    return getDocumentPreviewPath(url, label, returnTo);
   }
 
   return url;
+}
+
+function getCurrentDashboardReturnPath() {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+function storeDashboardReturnScroll() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(
+      dashboardReturnScrollStorageKey,
+      JSON.stringify({
+        path: getCurrentDashboardReturnPath(),
+        scrollY: window.scrollY,
+        updatedAt: Date.now()
+      })
+    );
+  } catch {
+    // Session storage can be unavailable in private browsing or restricted webviews.
+  }
+}
+
+function restoreDashboardReturnScroll() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const snapshot = readDashboardReturnScroll();
+
+  if (!snapshot) {
+    return false;
+  }
+
+  if (snapshot.path !== getCurrentDashboardReturnPath()) {
+    return false;
+  }
+
+  removeDashboardReturnScroll();
+
+  const targetScrollY = Math.max(0, snapshot.scrollY);
+  let attempts = 0;
+
+  function scrollWhenReady() {
+    attempts += 1;
+
+    const maxScrollY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const canReachTarget = maxScrollY >= targetScrollY;
+
+    if (canReachTarget || attempts >= 12) {
+      window.scrollTo({ top: Math.min(targetScrollY, maxScrollY), left: 0, behavior: "auto" });
+      return;
+    }
+
+    window.requestAnimationFrame(scrollWhenReady);
+  }
+
+  window.requestAnimationFrame(scrollWhenReady);
+  return true;
+}
+
+function readDashboardReturnScroll(): { path: string; scrollY: number } | null {
+  try {
+    const value = window.sessionStorage.getItem(dashboardReturnScrollStorageKey);
+
+    if (!value) {
+      return null;
+    }
+
+    const parsed = JSON.parse(value) as { path?: unknown; scrollY?: unknown; updatedAt?: unknown };
+    const isExpired = typeof parsed.updatedAt === "number" && Date.now() - parsed.updatedAt > 1000 * 60 * 10;
+
+    if (isExpired) {
+      removeDashboardReturnScroll();
+      return null;
+    }
+
+    if (typeof parsed.path !== "string" || typeof parsed.scrollY !== "number") {
+      return null;
+    }
+
+    return {
+      path: parsed.path,
+      scrollY: parsed.scrollY
+    };
+  } catch {
+    return null;
+  }
+}
+
+function removeDashboardReturnScroll() {
+  try {
+    window.sessionStorage.removeItem(dashboardReturnScrollStorageKey);
+  } catch {
+    // Session storage can be unavailable in private browsing or restricted webviews.
+  }
 }
 
 function subscribeToInteractiveState() {

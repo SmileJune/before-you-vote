@@ -15,6 +15,7 @@ export const metadata: Metadata = {
 
 type DocumentPreviewPageProps = {
   searchParams: Promise<{
+    returnTo?: string;
     title?: string;
     url?: string;
   }>;
@@ -24,13 +25,14 @@ export default async function DocumentPreviewPage({ searchParams }: DocumentPrev
   const params = await searchParams;
   const sourceUrl = parseAllowedDocumentUrl(params.url);
   const title = normalizeTitle(params.title);
+  const returnTo = normalizeReturnTo(params.returnTo);
 
   if (!sourceUrl) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-paper px-4">
         <div className="w-full max-w-md rounded-md border border-line bg-white p-5 text-center">
           <p className="text-sm font-semibold">문서 주소를 확인할 수 없습니다.</p>
-          <Link className="mt-4 inline-flex rounded-md bg-civic px-4 py-2 text-sm font-semibold text-white" href="/">
+          <Link className="mt-4 inline-flex rounded-md bg-civic px-4 py-2 text-sm font-semibold text-white" href={returnTo ?? "/"}>
             돌아가기
           </Link>
         </div>
@@ -45,7 +47,7 @@ export default async function DocumentPreviewPage({ searchParams }: DocumentPrev
     <main className="min-h-screen bg-paper text-ink">
       <header className="sticky top-0 z-20 border-b border-line bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-2 px-3 py-3">
-          <DocumentPreviewBackLink />
+          <DocumentPreviewBackLink returnTo={returnTo} />
           <h1 className="min-w-0 flex-1 truncate text-sm font-bold">{title}</h1>
           <a
             aria-label="원본 열기"
@@ -61,6 +63,16 @@ export default async function DocumentPreviewPage({ searchParams }: DocumentPrev
       <DocumentPreviewViewer documentUrl={documentUrl} downloadUrl={downloadUrl} sourceUrl={sourceUrl.toString()} />
     </main>
   );
+}
+
+function normalizeReturnTo(value: string | undefined) {
+  const returnTo = value?.trim();
+
+  if (!returnTo || !returnTo.startsWith("/") || returnTo.startsWith("//")) {
+    return null;
+  }
+
+  return returnTo.slice(0, 2048);
 }
 
 function normalizeTitle(value: string | undefined) {

@@ -5,7 +5,9 @@ import type { MouseEvent } from "react";
 
 export const documentPreviewLeaveEventName = "document-preview:leave";
 
-export function DocumentPreviewBackLink() {
+export function DocumentPreviewBackLink({ returnTo }: { returnTo: string | null }) {
+  const href = returnTo ?? "/";
+
   function signalLeave() {
     window.dispatchEvent(new Event(documentPreviewLeaveEventName));
   }
@@ -20,15 +22,20 @@ export function DocumentPreviewBackLink() {
     if (isSameOriginReferrer()) {
       event.preventDefault();
       window.history.back();
+      return;
+    }
+
+    if (returnTo) {
+      event.preventDefault();
+      window.location.replace(returnTo);
     }
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-html-link-for-pages
     <a
       aria-label="돌아가기"
       className="rounded-md border border-line p-2"
-      href="/"
+      href={href}
       onClick={handleClick}
       onPointerDown={handlePointerDown}
     >

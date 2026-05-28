@@ -33,8 +33,12 @@ export function getDocumentProxyPath(url: string, options: { download?: boolean 
   return `/api/document-download?${params.toString()}`;
 }
 
-export function getDocumentPreviewPath(url: string, title: string) {
+export function getDocumentPreviewPath(url: string, title: string, returnTo?: string) {
   const params = new URLSearchParams({ url, title });
+
+  if (returnTo) {
+    params.set("returnTo", returnTo);
+  }
 
   return `/document-preview?${params.toString()}`;
 }
