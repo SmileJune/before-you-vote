@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 
   const filename = getDocumentFilename(sourceUrl);
   const headers = new Headers({
-    "Cache-Control": "public, max-age=86400",
+    "Cache-Control": "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400",
     "Content-Disposition": `${disposition}; filename=\"${filename}\"; filename*=UTF-8''${encodeRFC5987ValueChars(filename)}`,
     "Content-Type": "application/pdf",
     "X-Content-Type-Options": "nosniff"

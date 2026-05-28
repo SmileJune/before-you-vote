@@ -3,7 +3,7 @@
 import { AlertCircle, CheckCircle2, ChevronRight, FileText, MapPin, ShieldCheck } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { type UIEvent, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { type UIEvent, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   buildCandidateComparison,
   getElectionDetail,
@@ -73,6 +73,9 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
     getServerInteractiveSnapshot
   );
   const [comparisonScrollLeft, setComparisonScrollLeft] = useState(0);
+  const [isComparisonScrollable, setIsComparisonScrollable] = useState(false);
+  const [canComparisonScrollRight, setCanComparisonScrollRight] = useState(false);
+  const comparisonScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const comparisonLabelColumnWidth = 96;
   const comparisonValueColumnWidth = 128;
   const comparisonGridStyle = useMemo(
@@ -90,6 +93,21 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
     }),
     [comparison.rows.length, comparisonScrollLeft]
   );
+  const updateComparisonScrollState = useCallback((container: HTMLDivElement | null = comparisonScrollContainerRef.current) => {
+    if (!container) {
+      setComparisonScrollLeft(0);
+      setIsComparisonScrollable(false);
+      setCanComparisonScrollRight(false);
+      return;
+    }
+
+    const maxScrollLeft = container.scrollWidth - container.clientWidth;
+    const nextIsScrollable = maxScrollLeft > 1;
+
+    setComparisonScrollLeft(container.scrollLeft);
+    setIsComparisonScrollable(nextIsScrollable);
+    setCanComparisonScrollRight(nextIsScrollable && container.scrollLeft < maxScrollLeft - 1);
+  }, []);
   const regionsBySido = useMemo(() => {
     const grouped = new Map<string, Dataset["regions"]>();
 
@@ -101,8 +119,41 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
   }, [dataset.regions]);
 
   useEffect(() => {
+    const container = comparisonScrollContainerRef.current;
+
+    if (!container) {
+      updateComparisonScrollState(null);
+      return;
+    }
+
+    container.scrollLeft = 0;
+    updateComparisonScrollState(container);
+  }, [activeElectionId, comparison.rows.length, updateComparisonScrollState]);
+
+  useEffect(() => {
+    const container = comparisonScrollContainerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => updateComparisonScrollState(container));
+    const handleResize = () => updateComparisonScrollState(container);
+
+    resizeObserver?.observe(container);
+    window.addEventListener("resize", handleResize);
+    updateComparisonScrollState(container);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [comparison.rows.length, updateComparisonScrollState]);
+
+  useEffect(() => {
     function syncSelectionFromUrl() {
-      const urlSelection = readDashboardSelectionUrl();
+      const urlSelection = readDashboardSelectionUrl() ?? readPersistedDashboardSelection();
 
       if (!urlSelection) {
         return;
@@ -192,7 +243,7 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
   }
 
   function handleComparisonScroll(event: UIEvent<HTMLDivElement>) {
-    setComparisonScrollLeft(event.currentTarget.scrollLeft);
+    updateComparisonScrollState(event.currentTarget);
   }
 
   function updateSelection(nextSelection: DashboardSelection) {
@@ -373,7 +424,7 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
               <span className="text-xs text-muted">전체 {comparison.candidates.length}명</span>
             </div>
             {comparison.candidates.length >= 2 ? (
-              <div className="mt-3 rounded-md border border-line bg-white">
+              <div className="relative mt-3 overflow-hidden rounded-md border border-line bg-white">
                 <div className="sticky top-0 z-30 flex rounded-t-md border-b border-line bg-paper text-xs font-bold shadow-[0_1px_0_0_#d9e1ec]">
                   <div className="w-24 shrink-0 border-r border-line bg-paper px-3 py-2">후보</div>
                   <div className="min-w-0 flex-1 overflow-hidden">
@@ -386,7 +437,13 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
                     </div>
                   </div>
                 </div>
-                <div className="overflow-x-auto" onScroll={handleComparisonScroll}>
+                <div
+                  ref={comparisonScrollContainerRef}
+                  className="overflow-x-auto [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin]"
+                  onScroll={handleComparisonScroll}
+                  tabIndex={0}
+                  aria-label="후보 비교 표"
+                >
                   {comparison.candidates.map((candidate, candidateIndex) => (
                     <div
                       key={candidate.id}
@@ -408,6 +465,17 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
                     </div>
                   ))}
                 </div>
+                {isComparisonScrollable && canComparisonScrollRight ? (
+                  <div
+                    className="pointer-events-none absolute bottom-0 right-0 top-9 z-40 flex w-14 justify-end bg-gradient-to-l from-white via-white/80 to-transparent pr-1.5 pt-3"
+                    aria-hidden
+                  >
+                    <div className="inline-flex h-6 items-center gap-0.5 rounded-full border border-line bg-white/95 px-1.5 text-[10px] font-bold text-civic shadow-sm">
+                      <span>밀기</span>
+                      <ChevronRight size={13} strokeWidth={2.5} />
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="mt-3 rounded-md border border-line bg-white p-4 text-xs leading-5 text-muted">
@@ -652,6 +720,65 @@ function readDashboardSelectionUrl(): Partial<DashboardSelection> | null {
     areaId,
     electionId
   };
+}
+
+function readPersistedDashboardSelection(): Partial<DashboardSelection> | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const storedSelection = readDashboardSelectionFromStorage();
+
+  if (storedSelection) {
+    return storedSelection;
+  }
+
+  return readDashboardSelectionFromCookie();
+}
+
+function readDashboardSelectionFromStorage(): Partial<DashboardSelection> | null {
+  try {
+    return parseDashboardSelection(window.localStorage.getItem(dashboardSelectionStorageKey));
+  } catch {
+    return null;
+  }
+}
+
+function readDashboardSelectionFromCookie(): Partial<DashboardSelection> | null {
+  const prefix = `${dashboardSelectionCookieName}=`;
+  const value = document.cookie
+    .split(";")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(prefix))
+    ?.slice(prefix.length);
+
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return parseDashboardSelection(decodeURIComponent(value));
+  } catch {
+    return null;
+  }
+}
+
+function parseDashboardSelection(value: string | null | undefined): Partial<DashboardSelection> | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Partial<DashboardSelection>;
+
+    return {
+      regionSlug: parsed.regionSlug,
+      areaId: parsed.areaId,
+      electionId: parsed.electionId
+    };
+  } catch {
+    return null;
+  }
 }
 
 function areDashboardSelectionsEqual(first: DashboardSelection, second: DashboardSelection) {
