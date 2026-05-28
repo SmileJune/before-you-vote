@@ -608,7 +608,14 @@ export function ElectionDashboard({ dataset, initialSelection }: ElectionDashboa
                       <div className="flex gap-3">
                         <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-paper">
                           {candidate.photoUrl ? (
-                            <Image src={candidate.photoUrl} alt={`${candidate.name} 후보 사진`} fill sizes="64px" className="object-cover" />
+                            <Image
+                              src={candidate.photoUrl}
+                              alt={`${candidate.name} 후보 사진`}
+                              fill
+                              sizes="64px"
+                              className="object-cover"
+                              unoptimized
+                            />
                           ) : (
                             <div className="flex h-full items-center justify-center text-xs text-muted">사진</div>
                           )}
